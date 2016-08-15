@@ -64,11 +64,9 @@ Router(<Scene key="root" >
           hideBackImage
           onBack={() => alert('Left button!')}
           backTitle="Left"
-          duration={1}
-          panHandlers={null}
         />
       </Scene>
-      <Scene key="tab3" component={TabView} title="Tab #3" hideTabBar />
+      <Scene key="tab3" component={TabView} title="Tab #3"  />
       <Scene key="tab4" component={TabView} title="Tab #4" hideNavBar />
       <Scene key="tab5" component={TabView} title="Tab #5" hideTabBar />
     </Scene>

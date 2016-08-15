@@ -119,9 +119,10 @@ function findRoot(scenes, key, parent = {}, index){
       scene.ref = Controllers.TabBarControllerIOS(id);
       return <TabBarControllerIOS id={id} {...scene} style={styles}>
         {scene.children
-          .map((el,i)=>findRoot(scenes, el,  scene,i))
-          .filter(el=>el)
-          .map(el=><TabBarControllerIOS.Item>{el}</TabBarControllerIOS.Item>)}
+          .map((el,i)=>{
+            const res = findRoot(scenes, el,  scene,i);
+            return res && <TabBarControllerIOS.Item {...scenes[el]}>{res}</TabBarControllerIOS.Item>;
+          })}
       </TabBarControllerIOS>
     }
   } else {
