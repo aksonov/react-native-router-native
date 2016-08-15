@@ -1,12 +1,12 @@
 # react-native-router-native
-Easy native navigation with react-native-controllers (forked) and declarative RNRF syntax (react-native-router-flux) (iOS is supported at this time)
+Easy native navigation with react-native-controllers (forked) and declarative RNRF syntax (react-native-router-flux) (iOS is supported at this time). Experimental!
 
 ## Why ?
-Native iOS Navigation with declarative syntax.
+Native iOS Navigation with declarative syntax. JS Navigation could be laggy and doesn't look as iOS native one.
 Detailed motivation is explained here: https://github.com/aksonov/react-native-controllers
 
 ## Example
-Check Example iOS project.
+Check Example iOS project (it is simular to react-native-router-flux demo)
 ```
 import React, {
   Component,
