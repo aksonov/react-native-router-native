@@ -96,7 +96,6 @@ function registerComponent(scene){
   }
 }
 function findRoot(scenes, key, parent = {}, index){
-  console.log('findRoot', key);
   const id = key;
   const scene = scenes[key];
   let component = scene.component;
@@ -111,9 +110,11 @@ function findRoot(scenes, key, parent = {}, index){
     if (scene.cube){
       scene.ref = Controllers.CubeBarControllerIOS(id);
       return <CubeBarControllerIOS id={id} {...scene} style={styles}>
-        {scene.children.map((el,i)=><CubeBarControllerIOS.Item>
-          {findRoot(scenes, el, scene,i)}
-        </CubeBarControllerIOS.Item>)}
+        {scene.children
+          .map((el,i)=>{
+            const res = findRoot(scenes, el,  scene,i);
+            return res && <CubeBarControllerIOS.Item {...scenes[el]}>{res}</CubeBarControllerIOS.Item>;
+          }).filter(el=>el)}
       </CubeBarControllerIOS>
     } else {
       scene.ref = Controllers.TabBarControllerIOS(id);
@@ -122,7 +123,7 @@ function findRoot(scenes, key, parent = {}, index){
           .map((el,i)=>{
             const res = findRoot(scenes, el,  scene,i);
             return res && <TabBarControllerIOS.Item {...scenes[el]}>{res}</TabBarControllerIOS.Item>;
-          })}
+          }).filter(el=>el)}
       </TabBarControllerIOS>
     }
   } else {
