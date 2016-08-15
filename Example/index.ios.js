@@ -9,31 +9,23 @@ import {
 import Launch from './components/Launch';
 import Register from './components/Register';
 import Login from './components/Login';
-import Login2 from './components/Login2';
-import Login3 from './components/Login3';
 import TabView from './components/TabView';
 import {
   Scene,
   Router,
-  Actions,
-  ActionConst,
 } from 'react-native-router-native';
 import Error from './components/Error';
-import Home from './components/Home';
 
 Router(<Scene key="root" >
   <Scene key="launch" component={Launch} title="Launch" hideNavBar />
   <Scene key="register" component={Register} title="Register" />
   <Scene key="login" component={Login} title="Login" modal/>
   <Scene key="tabbar" drawer >
-    <Scene
-      key="main"
-      tabs
-    >
+    <Scene key="main" tabs>
       <Scene
         key="tab1"
         title="Tab #1"
-        navigationBarStyle={{ backgroundColor: 'red' }}
+        style={{ navBarBackgroundColor: 'red' }}
         titleStyle={{ color: 'white' }}
       >
         <Scene
