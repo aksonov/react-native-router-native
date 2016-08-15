@@ -25,6 +25,6 @@
   },
   "homepage": "https://github.com/aksonov/react-native-router-native#readme",
   "dependencies": {
-    "react-native-ios-controllers": "^2.0.20"
+    "react-native-ios-controllers": "^2.0.23"
   }
 }

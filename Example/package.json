@@ -3,10 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "node node_modules/react-native/local-cli/cli.js start"
+    "start": "node node_modules/react-native/local-cli/cli.js start",
+    "sync": "rm -rf ./node_modules/react-native-router-native; sane '/usr/bin/rsync -v -a --exclude .git --exclude Example --exclude node_modules ../ ./node_modules/react-native-router-native/' .. --glob='{**/*.json,**/*.js}'"
   },
   "dependencies": {
     "react": "15.2.1",
-    "react-native": "0.31.0"
+    "react-native": "0.30.0",
+    "react-native-button": "^1.6.0",
+    "react-native-router-native": "file:../"
   }
 }

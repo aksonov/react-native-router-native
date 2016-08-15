@@ -39,7 +39,7 @@ function registerListener(scene){
       }
     };
   } else {
-    console.log(`Scene ${scene.key} doesn't have state`)
+    //console.log(`Scene ${scene.key} doesn't have state`)
   }
 }
 
@@ -132,11 +132,10 @@ function findRoot(scenes, key, parent = {}, index){
       });
     }
     if (scene.component){
-      scene.ref = Controllers.ViewControllerIOS(id);
       const props = {...scene};
-      delete props.ref;
       delete props.state;
       if (props.modal){
+        scene.ref = Controllers.NavigationControllerIOS(id);
         ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
           return <NavigationControllerIOS id={id} {...props} passProps={props} style={styles} />}
         }));
@@ -145,6 +144,7 @@ function findRoot(scenes, key, parent = {}, index){
       if (props.lightbox) {
         return null;
       }
+      scene.ref = Controllers.ViewControllerIOS(id);
       return <ViewControllerIOS id={id} {...props} passProps={props} style={styles} />;
     } else {
       if (scene.drawer){
@@ -164,8 +164,12 @@ function findRoot(scenes, key, parent = {}, index){
 }
 function actionCallbackCreate(scenes) {
   const stack = [];
-  return (props) => {
-    const scene = scenes[props.key] || {};
+  return (props = {}) => {
+    let id = props.key;
+    if (!id && stack.length){
+      id = stack[stack.length-1].key;
+    }
+    const scene = scenes[id] || {};
     console.log("ACTION:", props);
     if (Actions.isTransition && scene.drawerDisableSwipe) {
       console.log("CANCELLED");
@@ -176,21 +180,26 @@ function actionCallbackCreate(scenes) {
     const newProps = {...sceneProps, ...props};
     const styles = createStyles(newProps);
     if (props.type === ActionConst.BACK_ACTION || props.type === ActionConst.BACK){
-      const prevScene = stack.pop();
-      if (prevScene.lightbox){
-        Modal.dismissLightBox();
+      if (stack.length){
+        const prevScene = stack.pop();
+        if (prevScene.lightbox){
+          Modal.dismissLightBox();
+        } else if (prevScene.modal){
+          Modal.dismissController(prevScene.animationType);
+        } else if (prevScene.parent && scenes[prevScene.parent].ref && scenes[prevScene.parent].ref.pop){
+          scenes[prevScene.parent].ref.pop({animated: prevScene.animated === undefined ? true : prevScene.animated});
+        }
+      } else {
+        console.log("CANNOT POP, empty stack!");
       }
-      if (prevScene.modal){
-        Modal.dismissController(prevScene.animationType);
-      }
-    }
-    if (props.type === ActionConst.REFRESH) {
+    } else if (props.type === ActionConst.REFRESH) {
       const obj = ref || scenes[scene.base].ref;
       //console.log("REFRESH", props);
       if (obj.setStyle && Object.keys(styles).length) {
         obj.setStyle(styles);
       }
       if (obj.refresh) {
+        console.log("OBJ REFRESH")
         obj.refresh(newProps);
       }
       
