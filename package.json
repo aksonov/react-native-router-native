@@ -1,0 +1,28 @@
+{
+  "name": "react-native-router-native",
+  "version": "0.0.1",
+  "description": "Easy native navigation with react-native-controllers (forked) and declarative RNRF syntax (react-native-router-flux) (iOS is supported at this time)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aksonov/react-native-router-native.git"
+  },
+  "keywords": [
+    "react-native",
+    "react-native-router-flux",
+    "ios",
+    "navigation"
+  ],
+  "author": "Pavlo Aksonov",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aksonov/react-native-router-native/issues"
+  },
+  "homepage": "https://github.com/aksonov/react-native-router-native#readme",
+  "dependencies": {
+    "react-native-ios-controllers": "^2.0.20"
+  }
+}
