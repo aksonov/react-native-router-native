@@ -139,7 +139,9 @@ function findRoot(scenes, key, parent = {}, index){
       if (props.modal){
         scene.ref = Controllers.NavigationControllerIOS(id);
         ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
-          return <NavigationControllerIOS id={id} {...props} passProps={props} style={styles} />}
+          const currentStyles = {...scenes[id].style};
+          //console.log("MODAL STYLES:", currentStyles);
+          return <NavigationControllerIOS id={id} {...props} passProps={props} style={currentStyles} />}
         }));
         return null;
       }
@@ -172,7 +174,7 @@ function actionCallbackCreate(scenes) {
       id = stack[stack.length-1].key;
     }
     const scene = scenes[id] || {};
-    console.log("ACTION:", props);
+    //console.log("ACTION:", props);
     if (Actions.isTransition && scene.drawerDisableSwipe) {
       console.log("CANCELLED");
       return;
@@ -198,11 +200,21 @@ function actionCallbackCreate(scenes) {
       const obj = ref || scenes[scene.base].ref;
       //console.log("REFRESH", props);
       if (obj.setStyle && Object.keys(styles).length) {
-        obj.setStyle(styles);
+        obj.setStyle({...styles});
+        // check modal children
+        if (scene.children){
+          scene.children.forEach(el=>{
+            if (scenes[el].modal){
+              //console.log("REFRESH MODAL:", scenes[el].ref);
+              scenes[el].ref.setStyle({...styles});
+              scenes[el].style = {...scenes[el].style, ...styles};
+            }
+          })
+        }
       }
       if (obj.refresh) {
-        console.log("OBJ REFRESH")
-        obj.refresh(newProps);
+        //console.log("OBJ REFRESH")
+        obj.refresh({...newProps});
       }
       
       if (obj.setRightButtons) {
