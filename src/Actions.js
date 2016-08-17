@@ -79,7 +79,8 @@ class Actions {
       `'${key}' is not allowed as key name. Reserved keys: [${reservedKeys.join(', ')}]`
     );
     const { children, component, ...staticProps } = root.props;
-    let type = root.props.type || (parentProps.tabs ? ActionConst.JUMP : ActionConst.PUSH);
+    let type = root.props.type || (parentProps.tabs && !root.props.clone ?
+        ActionConst.JUMP : ActionConst.PUSH);
     if (type === 'switch') {
       type = ActionConst.JUMP;
     }
@@ -141,7 +142,7 @@ class Actions {
         assert(component, `component property is not set for key=${key}`);
       }
       // wrap scene if parent is "tabs"
-      if (parentProps.tabs && !res.modal && !res.lightbox) {
+      if (parentProps.tabs && !res.modal && !res.lightbox && !res.clone) {
         const innerKey = `${res.key}_`;
         baseKey = innerKey;
         subStateParent = res.key;

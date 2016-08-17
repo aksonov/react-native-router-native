@@ -22,6 +22,8 @@ const {
 const eventEmitter = new NativeEventEmitter(NativeModules.RCCEventEmitter);
 
 import Actions, { ActionMap } from './Actions';
+import createState from './State';
+import createReducer, {getCurrent} from './Reducer';
 import * as ActionConst from './ActionConst';
 
 function registerListener(scene){
@@ -29,7 +31,7 @@ function registerListener(scene){
   if (scene.state) {
     scene.state.listener = {
       onEnter: (props) => {
-        //console.log("RUN ACTION ",id);
+        console.log("RUN ACTION ",id);
         Actions[id](props);
         //InteractionManager.runAfterInteractions(()=>Actions[root.key](props));
       },
@@ -43,12 +45,9 @@ function registerListener(scene){
   }
 }
 
-function registerButtons(scene, parent){
-  if (scene.modal && !scene.onLeft && !scene.leftButton){
-    scene.onLeft = ()=>Actions.pop();
-  }
+function registerButtons(scene, parent = {}){
   if (scene.modal && !scene.leftTitle && !scene.leftButton){
-    scene.leftTitle = 'Cancel';
+    scene.leftButton = {title: 'Cancel', textColor: parent.style && parent.style.navBarCancelColor, onPress: ()=>Actions.pop()};
   }
   if (!scene.rightButtons && scene.onRight){
     scene.rightButtons = [{title:scene.rightTitle, onPress:scene.onRight || scene.component.onRight}];
@@ -106,14 +105,17 @@ function findRoot(scenes, key, parent = {}, index){
   registerComponent(scene);
   
   const styles = createStyles(scene, parent);
+  if (scene.modal){
+    scene.style = styles;
+  }
   if (scene.tabs){
     if (scene.cube){
       scene.ref = Controllers.CubeBarControllerIOS(id);
       return <CubeBarControllerIOS id={id} {...scene} style={styles}>
         {scene.children
           .map((el,i)=>{
-            const res = findRoot(scenes, el,  scene,i);
-            return res && <CubeBarControllerIOS.Item {...scenes[el]}>{res}</CubeBarControllerIOS.Item>;
+            const res = findRoot(scenes, el,  scene, i);
+            return res && !scenes[el].clone && <CubeBarControllerIOS.Item {...scenes[el]}>{res}</CubeBarControllerIOS.Item>;
           }).filter(el=>el)}
       </CubeBarControllerIOS>
     } else {
@@ -121,8 +123,8 @@ function findRoot(scenes, key, parent = {}, index){
       return <TabBarControllerIOS id={id} {...scene} style={styles}>
         {scene.children
           .map((el,i)=>{
-            const res = findRoot(scenes, el,  scene,i);
-            return res && <TabBarControllerIOS.Item {...scenes[el]}>{res}</TabBarControllerIOS.Item>;
+            const res = findRoot(scenes, el,  scene, i);
+            return res && !scenes[el].clone && <TabBarControllerIOS.Item {...scenes[el]}>{res}</TabBarControllerIOS.Item>;
           }).filter(el=>el)}
       </TabBarControllerIOS>
     }
@@ -148,53 +150,73 @@ function findRoot(scenes, key, parent = {}, index){
       if (props.lightbox) {
         return null;
       }
+      if (props.clone) {
+        return null;
+      }
       scene.ref = Controllers.ViewControllerIOS(id);
       return <ViewControllerIOS id={id} {...props} passProps={props} style={styles} />;
     } else {
       if (scene.drawer){
         scene.ref = Controllers.DrawerControllerIOS(id);
         return <DrawerControllerIOS animationType='slide' id={scene.key} {...scene} type="MMDrawer">
-          {findRoot(scenes, scene.children[0],  scene)}
+          {findRoot(scenes, scene.children[0],  scene, undefined)}
         </DrawerControllerIOS>;
       } else {
         scene.ref = Controllers.NavigationControllerIOS(id);
         const props = {...scene};
-        return <NavigationControllerIOS id={id} {...props}>
-          {scene.children.map((el,i)=>findRoot(scenes, el, scene,i))}
+        const children = scene.children;
+        // empty left buttons for all children
+        scene.children.forEach(el=>{
+          if (!scenes[el].modal){
+            scenes[el].leftButtons = [];
+          }
+        });
+        return <NavigationControllerIOS id={id} {...props} style={styles}>
+          {children.map((el,i)=>findRoot(scenes, el, scene, i))}
         </NavigationControllerIOS>;
       }
     }
   }
 }
+
 function actionCallbackCreate(scenes) {
-  const stack = [];
+  let currentState = undefined;
+  let nextState = undefined;
+  let currentScene = undefined;
+  const reducer = createReducer({initialState: createState(scenes), scenes});
   return (props = {}) => {
+    currentState = nextState;
     let id = props.key;
-    if (!id && stack.length){
-      id = stack[stack.length-1].key;
+    if (currentState){
+      currentScene = getCurrent(currentState);
+      console.log("CURRENT SCENE:", currentScene.sceneKey);
+    }
+    if (!id){
+      id = currentScene.sceneKey;
     }
     const scene = scenes[id] || {};
-    //console.log("ACTION:", props);
-    if (Actions.isTransition && scene.drawerDisableSwipe) {
+    console.log("ACTION:", props);
+    if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
       console.log("CANCELLED");
       return;
     }
-    const parent = scenes[scene.parent || scene.base];
+    nextState = reducer(currentState, props);
+    const parent = scenes[props.parent || scene.parent || scene.base];
+    console.log("PARENT:", parent && parent.key);
     const {component, state, style, ref, rightButtons = [], leftButtons = [], ...sceneProps} = scene;
     const newProps = {...sceneProps, ...props};
     const styles = createStyles(newProps);
     if (props.type === ActionConst.BACK_ACTION || props.type === ActionConst.BACK){
-      if (stack.length){
-        const prevScene = stack.pop();
-        if (prevScene.lightbox){
-          Modal.dismissLightBox();
-        } else if (prevScene.modal){
-          Modal.dismissController(prevScene.animationType);
-        } else if (prevScene.parent && scenes[prevScene.parent].ref && scenes[prevScene.parent].ref.pop){
-          scenes[prevScene.parent].ref.pop({animated: prevScene.animated === undefined ? true : prevScene.animated});
+      if (currentScene.lightbox){
+        Modal.dismissLightBox();
+      } else if (currentScene.modal){
+        Modal.dismissController(currentScene.animationType);
+      } else if (currentScene.parent && scenes[currentScene.parent].ref && scenes[currentScene.parent].ref.pop){
+        if (currentScene.state){
+          console.log("CALL POP FOR STATE", currentScene.sceneKey);
+          currentScene.state.parent.pop();
         }
-      } else {
-        console.log("CANNOT POP, empty stack!");
+        scenes[currentScene.parent].ref.pop({animated: currentScene.animated === undefined ? true : currentScene.animated});
       }
     } else if (props.type === ActionConst.REFRESH) {
       const obj = ref || scenes[scene.base].ref;
@@ -224,15 +246,19 @@ function actionCallbackCreate(scenes) {
         obj.setLeftButtons([...leftButtons]);
       }
     } else if (props.type === ActionConst.PUSH && !scene.modal && !scene.lightbox) {
-      stack.push(scene);
-      //console.log("PUSH PROPS", scenes[scene.parent].ref, props);
-        scenes[scene.parent].ref.push({id: scene.key, passProps: {...sceneProps, ...props}});
+      let parent = scenes[scene.parent]
+      if (scene.clone){
+        console.log("GET PARENT FOR CLONE", getCurrent(currentState).sceneKey);
+        parent = scenes[getCurrent(currentState).parent];
+        parent.ref.push({...scene, id: scene.key, passProps: {...sceneProps, ...props}});
+      } else {
+        console.log("PUSH PROPS", parent.ref, props);
+        parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}});
+      }
     } else if (scene.modal) {
-      stack.push(scene);
       console.log("MODAL!", scene.key);
       Modal.showController(scene.key, scene.animationType);
     } else if (scene.lightbox) {
-      stack.push(scene);
       console.log("LIGHTBOX!", scene.key);
       Modal.showLightBox({style: {
         backgroundBlur: "dark"}, ...scene});
@@ -255,10 +281,10 @@ function createRouter(scenes, props){
   const scenesMap = Actions.create(scenes, wrapBy);
   
   //console.log("SCENES:", Object.keys(Actions));
-  const root = findRoot(scenesMap, scenes.key);
+  const root = findRoot(scenesMap, scenes.key, undefined);
   Actions.get = id=>scenesMap[id];
   Actions.callback = actionCallbackCreate(scenesMap);
-  eventEmitter.addListener('WillPop', (data) => {Actions.pop(); props.onPop && props.onPop(data)});
+  eventEmitter.addListener('WillPop', (data) => {console.log("ONPOP");Actions.pop(); props.onPop && props.onPop(data)});
   eventEmitter.addListener('WillTransition', () => Actions.isTransition = true);
   eventEmitter.addListener('DidTransition', () => Actions.isTransition = false);
   return Controllers.createClass({
