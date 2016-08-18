@@ -50,7 +50,11 @@ function registerButtons(scene, parent = {}){
     scene.leftButton = {title: 'Cancel', textColor: parent.style && parent.style.navBarCancelColor, onPress: ()=>Actions.pop()};
   }
   if (!scene.rightButtons && scene.onRight){
-    scene.rightButtons = [{title:scene.rightTitle, onPress:scene.onRight || scene.component.onRight}];
+    if (scene.rightTitle){
+      scene.rightButtons = [{title:scene.rightTitle, onPress:scene.onRight || scene.component.onRight}];
+    } else {
+      scene.rightButtons = [{icon:scene.rightButtonImage, onPress:scene.onRight || scene.component.onRight}];
+    }
   }
   if (!scene.rightButtons && scene.rightButton){
     scene.rightButtons = [scene.rightButton];
@@ -59,7 +63,11 @@ function registerButtons(scene, parent = {}){
     scene.rightButtons = parent.rightButtons;
   }
   if (!scene.leftButtons && scene.onLeft){
-    scene.leftButtons = [{title:scene.leftTitle, onPress:scene.onLeft || scene.component.onLeft}];
+    if (scene.leftTitle){
+      scene.leftButtons = [{title:scene.leftTitle, onPress:scene.onLeft || scene.component.onLeft}];
+    } else {
+      scene.leftButtons = [{icon:scene.leftButtonImage, onPress:scene.onLeft || scene.component.onLeft}];
+    }
   }
   if (!scene.leftButtons && scene.leftButton){
     scene.leftButtons = [scene.leftButton];
@@ -74,10 +82,18 @@ function createStyles(scene, parent = {}) {
   if (scene.hideNavBar) {
     styles.navBarHidden = true;
   }
+  if (scene.hideNavBar === false) {
+    styles.navBarHidden = false;
+  }
   if (scene.navTransparent){
     styles.drawUnderNavBar = true;
     styles.navBarTranslucent = true;
     styles.navBarTransparent = true;
+  }
+  if (scene.navTransparent === false){
+    styles.drawUnderNavBar = false;
+    styles.navBarTranslucent = false;
+    styles.navBarTransparent = false;
   }
   if (scene.hideTabBar){
     styles.tabBarHidden = true;
@@ -93,6 +109,25 @@ function registerComponent(scene){
       scene[value] = scene.key+value;
     }
   }
+}
+
+function clone(obj) {
+  if(obj == null || typeof(obj) != 'object') {
+    return obj;
+  }
+  
+  var temp = new obj.constructor();
+  
+  for(var key in obj) {
+      
+    if (obj.hasOwnProperty(key)) {
+      if (key != 'state') {
+        temp[key] = clone(obj[key]);
+      }
+    }
+  }
+  
+  return temp;
 }
 function findRoot(scenes, key, parent = {}, index){
   const id = key;
@@ -111,7 +146,7 @@ function findRoot(scenes, key, parent = {}, index){
   if (scene.tabs){
     if (scene.cube){
       scene.ref = Controllers.CubeBarControllerIOS(id);
-      return <CubeBarControllerIOS id={id} {...scene} style={styles}>
+      return <CubeBarControllerIOS id={id} {...clone(scene)} style={styles}>
         {scene.children
           .map((el,i)=>{
             const res = findRoot(scenes, el,  scene, i);
@@ -120,7 +155,7 @@ function findRoot(scenes, key, parent = {}, index){
       </CubeBarControllerIOS>
     } else {
       scene.ref = Controllers.TabBarControllerIOS(id);
-      return <TabBarControllerIOS id={id} {...scene} style={styles}>
+      return <TabBarControllerIOS id={id} {...clone(scene)} style={styles}>
         {scene.children
           .map((el,i)=>{
             const res = findRoot(scenes, el,  scene, i);
@@ -136,14 +171,14 @@ function findRoot(scenes, key, parent = {}, index){
       });
     }
     if (scene.component){
-      const props = {...scene};
+      let props = {...scene};
       delete props.state;
       if (props.modal){
         scene.ref = Controllers.NavigationControllerIOS(id);
         ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
-          const currentStyles = {...scenes[id].style};
-          //console.log("MODAL STYLES:", currentStyles);
-          return <NavigationControllerIOS id={id} {...props} passProps={props} style={currentStyles} />}
+          const currentStyles = {...scenes[id].style, navBarHidden: false};
+          console.log("MODAL STYLES:", currentStyles);
+          return <NavigationControllerIOS id={id} {...clone(props)} passProps={props} style={currentStyles} />}
         }));
         return null;
       }
@@ -154,11 +189,11 @@ function findRoot(scenes, key, parent = {}, index){
         return null;
       }
       scene.ref = Controllers.ViewControllerIOS(id);
-      return <ViewControllerIOS id={id} {...props} passProps={props} style={styles} />;
+      return <ViewControllerIOS id={id} {...clone(props)} passProps={props} style={styles} />;
     } else {
       if (scene.drawer){
         scene.ref = Controllers.DrawerControllerIOS(id);
-        return <DrawerControllerIOS animationType='slide' id={scene.key} {...scene} type="MMDrawer">
+        return <DrawerControllerIOS animationType='slide' id={scene.key} {...clone(scene)} type="MMDrawer">
           {findRoot(scenes, scene.children[0],  scene, undefined)}
         </DrawerControllerIOS>;
       } else {
@@ -166,12 +201,12 @@ function findRoot(scenes, key, parent = {}, index){
         const props = {...scene};
         const children = scene.children;
         // empty left buttons for all children
-        scene.children.forEach(el=>{
-          if (!scenes[el].modal){
+        scene.children.forEach((el,i)=>{
+          if (!scenes[el].modal && i){
             scenes[el].leftButtons = [];
           }
         });
-        return <NavigationControllerIOS id={id} {...props} style={styles}>
+        return <NavigationControllerIOS id={id} {...clone(props)} style={styles}>
           {children.map((el,i)=>findRoot(scenes, el, scene, i))}
         </NavigationControllerIOS>;
       }
@@ -197,13 +232,13 @@ function actionCallbackCreate(scenes) {
     const scene = scenes[id] || {};
     console.log("ACTION:", props);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
-      console.log("CANCELLED");
+      console.log("CANCELLED", Actions.isTransition);
       return;
     }
     nextState = reducer(currentState, props);
     const parent = scenes[props.parent || scene.parent || scene.base];
     console.log("PARENT:", parent && parent.key);
-    const {component, state, style, ref, rightButtons = [], leftButtons = [], ...sceneProps} = scene;
+    let {component, state, style, ref, rightButtons, leftButtons, ...sceneProps} = scene;
     const newProps = {...sceneProps, ...props};
     const styles = createStyles(newProps);
     if (props.type === ActionConst.BACK_ACTION || props.type === ActionConst.BACK){
@@ -220,7 +255,7 @@ function actionCallbackCreate(scenes) {
       }
     } else if (props.type === ActionConst.REFRESH) {
       const obj = ref || scenes[scene.base].ref;
-      //console.log("REFRESH", props);
+      console.log("REFRESH", props, rightButtons, leftButtons);
       if (obj.setStyle && Object.keys(styles).length) {
         obj.setStyle({...styles});
         // check modal children
@@ -228,22 +263,32 @@ function actionCallbackCreate(scenes) {
           scene.children.forEach(el=>{
             if (scenes[el].modal){
               //console.log("REFRESH MODAL:", scenes[el].ref);
-              scenes[el].ref.setStyle({...styles});
-              scenes[el].style = {...scenes[el].style, ...styles};
+              const modalStyles = {...styles};
+              delete modalStyles.hideNavBar;
+              console.log("REFRESH MODAL:", {...modalStyles});
+              scenes[el].ref.setStyle({...modalStyles});
+              scenes[el].style = {...scenes[el].style, ...modalStyles};
             }
           })
         }
       }
-      if (obj.refresh) {
-        //console.log("OBJ REFRESH")
-        obj.refresh({...newProps});
+      if (obj.setRightButtons && rightButtons) {
+        obj.setRightButtons(clone(rightButtons));
       }
-      
-      if (obj.setRightButtons) {
-        obj.setRightButtons([...rightButtons]);
+      if (obj.setLeftButtons && leftButtons) {
+        obj.setLeftButtons(clone(leftButtons));
       }
-      if (obj.setLeftButtons) {
-        obj.setLeftButtons([...leftButtons]);
+      const refreshProps = clone(newProps);
+      delete refreshProps.hideNavBar;
+      delete refreshProps.key;
+      delete refreshProps.name;
+      delete refreshProps.base;
+      delete refreshProps.parent;
+      delete refreshProps.index;
+      delete refreshProps.type;
+      if (obj.refresh && Object.keys(refreshProps).length) {
+        console.log("OBJ REFRESH", refreshProps)
+        obj.refresh(refreshProps);
       }
     } else if (props.type === ActionConst.PUSH && !scene.modal && !scene.lightbox) {
       let parent = scenes[scene.parent]
