@@ -45,6 +45,39 @@ function registerListener(scene){
   }
 }
 
+function merge(target, source) {
+  
+  /* Merges two (or more) objects,
+   giving the last one precedence */
+  
+  if ( typeof target !== 'object' ) {
+    target = {};
+  }
+  
+  for (var property in source) {
+    
+    if ( source.hasOwnProperty(property) ) {
+      
+      var sourceProperty = source[ property ];
+      
+      if ( typeof sourceProperty === 'object' ) {
+        target[ property ] =merge( target[ property ], sourceProperty );
+        continue;
+      }
+      
+      target[ property ] = sourceProperty;
+      
+    }
+    
+  }
+  
+  for (var a = 2, l = arguments.length; a < l; a++) {
+    merge(target, arguments[a]);
+  }
+  
+  return target;
+}
+
 function registerButtons(scene, parent = {}){
   if (scene.modal && !scene.leftTitle && !scene.leftButton){
     scene.leftButton = {title: 'Cancel', textColor: parent.style && parent.style.navBarCancelColor, onPress: ()=>Actions.pop()};
@@ -75,6 +108,14 @@ function registerButtons(scene, parent = {}){
   if (!scene.leftButtons && parent.leftButtons){
     scene.leftButtons = parent.leftButtons;
   }
+  delete scene.leftButton;
+  delete scene.rightButton;
+  delete scene.onRight;
+  delete scene.onLeft;
+  delete scene.rightTitle;
+  delete scene.leftTitle;
+  delete scene.rightButtonImage;
+  delete scene.leftButtonImage;
 }
 
 function createStyles(scene, parent = {}) {
@@ -255,7 +296,6 @@ function actionCallbackCreate(scenes) {
       }
     } else if (props.type === ActionConst.REFRESH) {
       const obj = ref || scenes[scene.base].ref;
-      console.log("REFRESH", props, rightButtons, leftButtons);
       if (obj.setStyle && Object.keys(styles).length) {
         obj.setStyle({...styles});
         // check modal children
@@ -272,20 +312,35 @@ function actionCallbackCreate(scenes) {
           })
         }
       }
-      if (obj.setRightButtons && rightButtons) {
-        obj.setRightButtons(clone(rightButtons));
+      let refreshProps = clone(newProps);
+      registerButtons(refreshProps);
+      refreshProps = merge({leftButtons, rightButtons}, refreshProps);
+      console.log("REFRESH", obj, refreshProps.rightButtons);
+      if (scene.unsubscribes){
+        scene.unsubscribes.forEach(unsubscribe=>unsubscribe());
       }
-      if (obj.setLeftButtons && leftButtons) {
-        obj.setLeftButtons(clone(leftButtons));
+      scene.unsubscribes = [];
+      if (obj.setRightButtons && refreshProps.rightButtons) {
+        console.log("SETRIGHTBUTTONS");
+        scene.unsubscribes.push(obj.setRightButtons(clone(refreshProps.rightButtons)));
       }
-      const refreshProps = clone(newProps);
+      if (obj.setLeftButtons && refreshProps.leftButtons) {
+        scene.unsubscribes.push(obj.setLeftButtons(clone(refreshProps.leftButtons)));
+      }
       delete refreshProps.hideNavBar;
+      delete refreshProps.hideTabBar;
       delete refreshProps.key;
+      delete refreshProps.unsubscribes;
+      delete refreshProps.sceneKey;
       delete refreshProps.name;
+      delete refreshProps.children;
+      delete refreshProps.tabs;
       delete refreshProps.base;
       delete refreshProps.parent;
       delete refreshProps.index;
       delete refreshProps.type;
+      delete refreshProps.rightButtons;
+      delete refreshProps.leftButtons;
       if (obj.refresh && Object.keys(refreshProps).length) {
         console.log("OBJ REFRESH", refreshProps)
         obj.refresh(refreshProps);
