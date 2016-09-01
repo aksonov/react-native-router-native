@@ -1,6 +1,6 @@
 {
   "name": "react-native-router-native",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Easy native navigation with react-native-controllers (forked) and declarative RNRF syntax (react-native-router-flux) (iOS is supported at this time)",
   "main": "index.js",
   "scripts": {

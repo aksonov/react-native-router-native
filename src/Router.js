@@ -191,7 +191,7 @@ function findRoot(scenes, key, parent = {}, index){
         {scene.children
           .map((el,i)=>{
             const res = findRoot(scenes, el,  scene, i);
-            return res && !scenes[el].clone && <CubeBarControllerIOS.Item {...scenes[el]}>{res}</CubeBarControllerIOS.Item>;
+            return res && !scenes[el].clone && <CubeBarControllerIOS.Item {...clone(scenes[el])}>{res}</CubeBarControllerIOS.Item>;
           }).filter(el=>el)}
       </CubeBarControllerIOS>
     } else {
@@ -200,7 +200,7 @@ function findRoot(scenes, key, parent = {}, index){
         {scene.children
           .map((el,i)=>{
             const res = findRoot(scenes, el,  scene, i);
-            return res && !scenes[el].clone && <TabBarControllerIOS.Item {...scenes[el]}>{res}</TabBarControllerIOS.Item>;
+            return res && !scenes[el].clone && <TabBarControllerIOS.Item {...clone(scenes[el])}>{res}</TabBarControllerIOS.Item>;
           }).filter(el=>el)}
       </TabBarControllerIOS>
     }
