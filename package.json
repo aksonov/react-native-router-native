@@ -1,6 +1,6 @@
 {
   "name": "react-native-router-native",
-  "version": "0.0.10",
+  "version": "0.1.0",
   "description": "Easy native navigation with react-native-controllers (forked) and declarative RNRF syntax (react-native-router-flux) (iOS is supported at this time)",
   "main": "index.js",
   "scripts": {
@@ -25,6 +25,6 @@
   },
   "homepage": "https://github.com/aksonov/react-native-router-native#readme",
   "dependencies": {
-    "react-native-ios-controllers": "^2.1.2"
+    "react-native-ios-controllers": "^2.1.20"
   }
 }
