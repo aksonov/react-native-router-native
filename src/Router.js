@@ -247,9 +247,17 @@ function findRoot(scenes, key, parent = {}, index){
             scenes[el].leftButtons = [];
           }
         });
-        return <NavigationControllerIOS id={id} {...clone(props)} style={styles}>
+        const res = <NavigationControllerIOS id={id} {...clone(props)} style={styles}>
           {children.map((el,i)=>findRoot(scenes, el, scene, i))}
         </NavigationControllerIOS>;
+        
+        if (scene.modal){
+          ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
+            return res}
+          }));
+          return null;
+        }
+        return res;
       }
     }
   }
@@ -289,10 +297,21 @@ function actionCallbackCreate(scenes) {
         Modal.dismissController(currentScene.animationType);
       } else if (currentScene.parent && scenes[currentScene.parent].ref && scenes[currentScene.parent].ref.pop){
         if (currentScene.state){
-          console.log("CALL POP FOR STATE", currentScene.sceneKey);
+          console.log("CALL POP FOR STATE", currentScene.sceneKey, currentScene.parent);
           currentScene.state.parent.pop();
         }
-        scenes[currentScene.parent].ref.pop({animated: currentScene.animated === undefined ? true : currentScene.animated});
+        if (scenes[currentScene.parent].modal && (scenes[currentScene.parent].children.indexOf(currentScene.sceneKey) === 0 || currentScene.type === 'reset')) {
+          Modal.dismissController(scenes[currentScene.parent].animationType);
+        } else {
+          if (!props.alreadyPop){
+            console.log("DO POP", props.alreadyPop, props.animated);
+            let animated = props.animated;
+            if (animated === undefined) {
+              animated = currentScene.animated;
+            }
+            scenes[currentScene.parent].ref.pop({animated: animated === undefined ? true : animated});
+          }
+        }
       }
     } else if (props.type === ActionConst.REFRESH) {
       const obj = ref || scenes[scene.base].ref;
@@ -348,16 +367,20 @@ function actionCallbackCreate(scenes) {
     } else if (props.type === ActionConst.PUSH && !scene.modal && !scene.lightbox) {
       let parent = scenes[scene.parent]
       if (scene.clone){
-        console.log("GET PARENT FOR CLONE", getCurrent(currentState).sceneKey);
-        parent = scenes[getCurrent(currentState).parent];
+        const current = getCurrent(currentState);
+        parent = scenes[current.modal ? current.sceneKey : current.parent];
+        console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key);
         parent.ref.push({...scene, id: scene.key, passProps: {...sceneProps, ...props}});
       } else {
         console.log("PUSH PROPS", parent.ref, props);
         parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}});
       }
+    } else if (props.type === 'reset') {
+      console.log("RESET ACTION!");
+      parent.ref.resetTo({...scene, id: scene.key, passProps: {...sceneProps, ...props}, style: styles});
     } else if (scene.modal) {
       console.log("MODAL!", scene.key);
-      Modal.showController(scene.key, scene.animationType);
+      Modal.showController(scene.key, scene.animationType, {style: styles});
     } else if (scene.lightbox) {
       console.log("LIGHTBOX!", scene.key);
       Modal.showLightBox({style: {
@@ -384,7 +407,7 @@ function createRouter(scenes, props){
   const root = findRoot(scenesMap, scenes.key, undefined);
   Actions.get = id=>scenesMap[id];
   Actions.callback = actionCallbackCreate(scenesMap);
-  eventEmitter.addListener('WillPop', (data) => {console.log("ONPOP");Actions.pop(); props.onPop && props.onPop(data)});
+  eventEmitter.addListener('WillPop', (data) => {console.log("ONPOP");Actions.pop({alreadyPop: true}); props.onPop && props.onPop(data)});
   eventEmitter.addListener('WillTransition', () => Actions.isTransition = true);
   eventEmitter.addListener('DidTransition', () => Actions.isTransition = false);
   return Controllers.createClass({
