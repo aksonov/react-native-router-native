@@ -80,7 +80,8 @@ function merge(target, source) {
 
 function registerButtons(scene, parent = {}){
   if (scene.modal && !scene.leftTitle && !scene.leftButton){
-    scene.leftButton = {title: 'Cancel', textColor: parent.style && parent.style.navBarCancelColor, onPress: ()=>Actions.pop()};
+    const styles = clone({...parent.style, ...scene.style});
+    scene.leftButton = {title: 'Cancel', fontFamily:styles.navBarFontFamily, textColor: styles.navBarCancelColor, onPress: ()=>Actions.pop()};
   }
   if (!scene.rightButtons && scene.onRight){
     if (scene.rightTitle){
@@ -119,7 +120,7 @@ function registerButtons(scene, parent = {}){
 }
 
 function createStyles(scene, parent = {}) {
-  const styles = {...parent.style, ...scene.style};
+  const styles = clone({...parent.style, ...scene.style});
   if (scene.hideNavBar) {
     styles.navBarHidden = true;
   }
@@ -243,7 +244,7 @@ function findRoot(scenes, key, parent = {}, index){
         const children = scene.children;
         // empty left buttons for all children
         scene.children.forEach((el,i)=>{
-          if (!scenes[el].modal && i){
+          if (!scenes[el].modal && i && !(scenes[el].type === 'reset')){
             scenes[el].leftButtons = [];
           }
         });
@@ -365,19 +366,27 @@ function actionCallbackCreate(scenes) {
         obj.refresh(refreshProps);
       }
     } else if (props.type === ActionConst.PUSH && !scene.modal && !scene.lightbox) {
+      if (currentScene && getCurrent(nextState).sceneKey === currentScene.sceneKey){
+        console.log("IGNORE PUSH ACTION BECAUSE OF THE SAME SCENE");
+        nextState = currentState;
+        return;
+      }
       let parent = scenes[scene.parent]
       if (scene.clone){
         const current = getCurrent(currentState);
         parent = scenes[current.modal ? current.sceneKey : current.parent];
-        console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key);
-        parent.ref.push({...scene, id: scene.key, passProps: {...sceneProps, ...props}});
+        console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, sceneProps);
+        const passProps = {...sceneProps, ...props};
+        parent.ref.push({...scene, id: scene.key, passProps, title:'passProps.title', style: styles});
       } else {
-        console.log("PUSH PROPS", parent.ref, props);
-        parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}});
+        if (parent){
+          console.log("PUSH PROPS", parent.ref, props);
+          parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}, style: styles});
+        }
       }
     } else if (props.type === 'reset') {
-      console.log("RESET ACTION!");
-      parent.ref.resetTo({...scene, id: scene.key, passProps: {...sceneProps, ...props}, style: styles});
+      console.log("RESET ACTION!", scene.key, scene.leftButtons, sceneProps.leftButtons);
+      parent.ref.resetTo(clone({...scene, id: scene.key, passProps: {...sceneProps, ...props}, style: styles}));
     } else if (scene.modal) {
       console.log("MODAL!", scene.key);
       Modal.showController(scene.key, scene.animationType, {style: styles});
