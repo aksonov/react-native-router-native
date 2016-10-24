@@ -238,7 +238,6 @@ function reducer({ initialState, scenes }) {
     let action = actionParam;
     state = state || { ...initialState, scenes };
     assert(action, 'action should be defined');
-    assert(action.type, 'action type should be defined');
     assert(state.scenes, 'state.scenes is missed');
 
     if (action.key) {

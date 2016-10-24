@@ -271,11 +271,11 @@ function actionCallbackCreate(scenes) {
   const reducer = createReducer({initialState: createState(scenes), scenes});
   return (props = {}) => {
     currentState = nextState;
-    let id = props.key;
-    if (currentState){
-      currentScene = getCurrent(currentState);
-      console.log("CURRENT SCENE:", currentScene.sceneKey);
+    if (!currentState) {
+      currentState = reducer(null, {});
     }
+    let id = props.key;
+    currentScene = getCurrent(currentState);
     if (!id){
       id = currentScene.sceneKey;
     }
@@ -373,6 +373,7 @@ function actionCallbackCreate(scenes) {
       }
       let parent = scenes[scene.parent]
       if (scene.clone){
+        console.log("getCurrent for clone");
         const current = getCurrent(currentState);
         parent = scenes[current.modal ? current.sceneKey : current.parent];
         console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, sceneProps);
@@ -417,8 +418,8 @@ function createRouter(scenes, props){
   Actions.get = id=>scenesMap[id];
   Actions.callback = actionCallbackCreate(scenesMap);
   eventEmitter.addListener('WillPop', (data) => {console.log("ONPOP");Actions.pop({alreadyPop: true}); props.onPop && props.onPop(data)});
-  eventEmitter.addListener('WillTransition', () => Actions.isTransition = true);
-  eventEmitter.addListener('DidTransition', () => Actions.isTransition = false);
+  eventEmitter.addListener('WillTransition', (event) => {Actions.willTransition && Actions.willTransition(event);Actions.isTransition = true});
+  eventEmitter.addListener('DidTransition', () => {Actions.didTransition && Actions.didTransition();Actions.isTransition = false});
   return Controllers.createClass({
     render(){
       return root;
