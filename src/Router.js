@@ -154,10 +154,12 @@ function registerComponent(scene){
 }
 
 function clone(obj) {
+  if (Array.isArray(obj)){
+    return obj.map(x=>clone(x));
+  }
   if(obj == null || typeof(obj) != 'object') {
     return obj;
   }
-  
   var temp = new obj.constructor();
   
   for(var key in obj) {
@@ -280,7 +282,7 @@ function actionCallbackCreate(scenes) {
       id = currentScene.sceneKey;
     }
     const scene = scenes[id] || {};
-    console.log("ACTION:", props);
+    console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
       console.log("CANCELLED", Actions.isTransition);
       return;
@@ -289,6 +291,12 @@ function actionCallbackCreate(scenes) {
     const parent = scenes[props.parent || scene.parent || scene.base];
     console.log("PARENT:", parent && parent.key);
     let {component, state, style, ref, rightButtons, leftButtons, ...sceneProps} = scene;
+    if (!leftButtons) {
+      leftButtons = [];
+    }
+    if (!rightButtons) {
+      rightButtons = [];
+    }
     const newProps = {...sceneProps, ...props};
     const styles = createStyles(newProps);
     if (props.type === ActionConst.BACK_ACTION || props.type === ActionConst.BACK){
@@ -315,7 +323,13 @@ function actionCallbackCreate(scenes) {
         }
       }
     } else if (props.type === ActionConst.REFRESH) {
-      const obj = ref || scenes[scene.base].ref;
+      let obj = ref || scenes[scene.base || scene.parent].ref;
+      if (scene.clone){
+        const current = getCurrent(currentState);
+        const cloneParent = scenes[current.modal ? current.sceneKey : current.parent];
+        console.log("GET PARENT FOR CLONE", current.sceneKey, cloneParent.key);
+        obj = cloneParent.ref;
+      }
       if (obj.setStyle && Object.keys(styles).length) {
         obj.setStyle({...styles});
         // check modal children
@@ -334,8 +348,8 @@ function actionCallbackCreate(scenes) {
       }
       let refreshProps = clone(newProps);
       registerButtons(refreshProps);
-      refreshProps = merge({leftButtons, rightButtons}, refreshProps);
-      console.log("REFRESH", obj, refreshProps.rightButtons);
+      refreshProps = merge(clone({leftButtons, rightButtons}), refreshProps);
+      console.log("REFRESH", obj, refreshProps.rightButtons, refreshProps.leftButtons, leftButtons);
       if (scene.unsubscribes){
         scene.unsubscribes.forEach(unsubscribe=>unsubscribe());
       }
@@ -345,6 +359,7 @@ function actionCallbackCreate(scenes) {
         scene.unsubscribes.push(obj.setRightButtons(clone(refreshProps.rightButtons)));
       }
       if (obj.setLeftButtons && refreshProps.leftButtons) {
+        console.log("SETLEFTBUTTONS",scene.leftButtons, JSON.stringify(refreshProps.leftButtons));
         scene.unsubscribes.push(obj.setLeftButtons(clone(refreshProps.leftButtons)));
       }
       delete refreshProps.hideNavBar;
@@ -378,7 +393,7 @@ function actionCallbackCreate(scenes) {
         parent = scenes[current.modal ? current.sceneKey : current.parent];
         console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, sceneProps);
         const passProps = {...sceneProps, ...props};
-        parent.ref.push({...scene, id: scene.key, passProps, title:'passProps.title', style: styles});
+        parent.ref.push({...scene, id: scene.key, passProps, title:passProps.title, style: styles});
       } else {
         if (parent){
           console.log("PUSH PROPS", parent.ref, props);
