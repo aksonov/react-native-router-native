@@ -222,7 +222,7 @@ function findRoot(scenes, key, parent = {}, index){
         ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
           const currentStyles = {...scenes[id].style, navBarHidden: false};
           console.log("MODAL STYLES:", currentStyles);
-          return <NavigationControllerIOS id={id} {...clone(props)} passProps={props} style={currentStyles} />}
+          return <NavigationControllerIOS id={id} {...clone(props)} passProps={clone(props)} style={currentStyles} />}
         }));
         return null;
       }
@@ -233,7 +233,7 @@ function findRoot(scenes, key, parent = {}, index){
         return null;
       }
       scene.ref = Controllers.ViewControllerIOS(id);
-      return <ViewControllerIOS id={id} {...clone(props)} passProps={props} style={styles} />;
+      return <ViewControllerIOS id={id} {...clone(props)} passProps={clone(props)} style={styles} />;
     } else {
       if (scene.drawer){
         scene.ref = Controllers.DrawerControllerIOS(id);
@@ -282,7 +282,7 @@ function actionCallbackCreate(scenes) {
       id = currentScene.sceneKey;
     }
     const scene = scenes[id] || {};
-    console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
+    //console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
       console.log("CANCELLED", Actions.isTransition);
       return;
