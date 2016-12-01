@@ -284,12 +284,12 @@ function actionCallbackCreate(scenes) {
     const scene = scenes[id] || {};
     //console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
-      console.log("CANCELLED", Actions.isTransition);
+      //console.log("CANCELLED", Actions.isTransition);
       return;
     }
     nextState = reducer(currentState, props);
     const parent = scenes[props.parent || scene.parent || scene.base];
-    console.log("PARENT:", parent && parent.key);
+    //console.log("PARENT:", parent && parent.key);
     let {component, state, style, ref, rightButtons, leftButtons, ...sceneProps} = scene;
     if (!leftButtons) {
       leftButtons = [];
@@ -339,7 +339,7 @@ function actionCallbackCreate(scenes) {
               //console.log("REFRESH MODAL:", scenes[el].ref);
               const modalStyles = {...styles};
               delete modalStyles.hideNavBar;
-              console.log("REFRESH MODAL:", {...modalStyles});
+              //console.log("REFRESH MODAL:", {...modalStyles});
               scenes[el].ref.setStyle({...modalStyles});
               scenes[el].style = {...scenes[el].style, ...modalStyles};
             }
@@ -349,17 +349,17 @@ function actionCallbackCreate(scenes) {
       let refreshProps = clone(newProps);
       registerButtons(refreshProps);
       refreshProps = merge(clone({leftButtons, rightButtons}), refreshProps);
-      console.log("REFRESH", obj, refreshProps.rightButtons, refreshProps.leftButtons, leftButtons);
+      //console.log("REFRESH", obj, refreshProps.rightButtons, refreshProps.leftButtons, leftButtons);
       if (scene.unsubscribes){
         scene.unsubscribes.forEach(unsubscribe=>unsubscribe());
       }
       scene.unsubscribes = [];
       if (obj.setRightButtons && refreshProps.rightButtons) {
-        console.log("SETRIGHTBUTTONS");
+        //console.log("SETRIGHTBUTTONS");
         scene.unsubscribes.push(obj.setRightButtons(clone(refreshProps.rightButtons)));
       }
       if (obj.setLeftButtons && refreshProps.leftButtons) {
-        console.log("SETLEFTBUTTONS",scene.leftButtons, JSON.stringify(refreshProps.leftButtons));
+        //console.log("SETLEFTBUTTONS",scene.leftButtons, JSON.stringify(refreshProps.leftButtons));
         scene.unsubscribes.push(obj.setLeftButtons(clone(refreshProps.leftButtons)));
       }
       delete refreshProps.hideNavBar;
@@ -377,45 +377,43 @@ function actionCallbackCreate(scenes) {
       delete refreshProps.rightButtons;
       delete refreshProps.leftButtons;
       if (obj.refresh && Object.keys(refreshProps).length) {
-        console.log("OBJ REFRESH", refreshProps)
+        //console.log("OBJ REFRESH", refreshProps)
         obj.refresh(refreshProps);
       }
     } else if (props.type === ActionConst.PUSH && !scene.modal && !scene.lightbox) {
       if (currentScene && getCurrent(nextState).sceneKey === currentScene.sceneKey){
-        console.log("IGNORE PUSH ACTION BECAUSE OF THE SAME SCENE");
+        //console.log("IGNORE PUSH ACTION BECAUSE OF THE SAME SCENE");
         nextState = currentState;
         return;
       }
       let parent = scenes[scene.parent]
       if (scene.clone){
-        console.log("getCurrent for clone");
+        //console.log("getCurrent for clone");
         const current = getCurrent(currentState);
         parent = scenes[current.modal ? current.sceneKey : current.parent];
-        console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, sceneProps);
+        //console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, sceneProps);
         const passProps = {...sceneProps, ...props};
         parent.ref.push({...scene, id: scene.key, passProps, title:passProps.title, style: styles});
       } else {
         if (parent){
-          console.log("PUSH PROPS", parent.ref, props);
+          //console.log("PUSH PROPS", parent.ref, props);
           parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}, style: styles});
         }
       }
     } else if (props.type === 'reset') {
-      console.log("RESET ACTION!", scene.key, scene.leftButtons, sceneProps.leftButtons);
+      //console.log("RESET ACTION!", scene.key, scene.leftButtons, sceneProps.leftButtons);
       parent.ref.resetTo(clone({...scene, id: scene.key, passProps: {...sceneProps, ...props}, style: styles}));
     } else if (scene.modal) {
-      console.log("MODAL!", scene.key);
       Modal.showController(scene.key, scene.animationType, {style: styles});
     } else if (scene.lightbox) {
-      console.log("LIGHTBOX!", scene.key);
-      Modal.showLightBox({style: {
+      Modal.showLightBox({passProps: {...sceneProps, ...props}, style: {
         backgroundBlur: "dark"}, ...scene});
     } else if (parent && parent.tabs) {
       if (parent.cube) {
-        console.log("SWITCH CUBE", scene.index);
+        //console.log("SWITCH CUBE", scene.index);
         parent.ref.switchTo({tabIndex: scene.index});
       } else {
-        console.log("SWITCH TAB", scene.index);
+        //console.log("SWITCH TAB", scene.index);
         parent.ref.switchTo({tabIndex: scene.index});
       }
     }
