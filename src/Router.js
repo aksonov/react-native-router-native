@@ -221,7 +221,6 @@ function findRoot(scenes, key, parent = {}, index){
         scene.ref = Controllers.NavigationControllerIOS(id);
         ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
           const currentStyles = {...scenes[id].style, navBarHidden: false};
-          console.log("MODAL STYLES:", currentStyles);
           return <NavigationControllerIOS id={id} {...clone(props)} passProps={clone(props)} style={currentStyles} />}
         }));
         return null;
@@ -256,7 +255,9 @@ function findRoot(scenes, key, parent = {}, index){
         
         if (scene.modal){
           ControllerRegistry.registerController(id, ()=>Controllers.createClass({render(){
-            return res}
+            return res
+          
+          }
           }));
           return null;
         }
@@ -282,9 +283,9 @@ function actionCallbackCreate(scenes) {
       id = currentScene.sceneKey;
     }
     const scene = scenes[id] || {};
-    //console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
+    console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
-      //console.log("CANCELLED", Actions.isTransition);
+      console.log("CANCELLED", Actions.isTransition);
       return;
     }
     nextState = reducer(currentState, props);
@@ -331,7 +332,7 @@ function actionCallbackCreate(scenes) {
         obj = cloneParent.ref;
       }
       if (obj.setStyle && Object.keys(styles).length) {
-        obj.setStyle({...styles});
+        //obj.setStyle(clone(styles));
         // check modal children
         if (scene.children){
           scene.children.forEach(el=>{
@@ -349,7 +350,7 @@ function actionCallbackCreate(scenes) {
       let refreshProps = clone(newProps);
       registerButtons(refreshProps);
       refreshProps = merge(clone({leftButtons, rightButtons}), refreshProps);
-      //console.log("REFRESH", obj, refreshProps.rightButtons, refreshProps.leftButtons, leftButtons);
+      console.log("REFRESH", obj, refreshProps.rightButtons, refreshProps.leftButtons, leftButtons);
       if (scene.unsubscribes){
         scene.unsubscribes.forEach(unsubscribe=>unsubscribe());
       }
@@ -404,7 +405,7 @@ function actionCallbackCreate(scenes) {
       //console.log("RESET ACTION!", scene.key, scene.leftButtons, sceneProps.leftButtons);
       parent.ref.resetTo(clone({...scene, id: scene.key, passProps: {...sceneProps, ...props}, style: styles}));
     } else if (scene.modal) {
-      Modal.showController(scene.key, scene.animationType, {style: styles});
+      Modal.showController(scene.key, scene.animationType, {...sceneProps, ...props, style: styles});
     } else if (scene.lightbox) {
       Modal.showLightBox({passProps: {...sceneProps, ...props}, style: {
         backgroundBlur: "dark"}, ...scene});

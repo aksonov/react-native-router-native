@@ -71,7 +71,7 @@ function inject(state, action, props, scenes) {
           break;
         }
       }
-      return changed ? { ...state, children: res, index: changedIndex } : state;
+      return changed ? { ...state, children: res, index: props.key ? state.index : changedIndex } : state;
     }
     return state;
   }
