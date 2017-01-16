@@ -283,7 +283,7 @@ function actionCallbackCreate(scenes) {
       id = currentScene.sceneKey;
     }
     const scene = scenes[id] || {};
-    console.log("ACTION:", props, "CURRENT SCENE:", id, scene.ref);
+    console.log("ACTION:", props, "CURRENT SCENE2:", id, scene.ref);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
       console.log("CANCELLED", Actions.isTransition);
       return;
@@ -392,12 +392,12 @@ function actionCallbackCreate(scenes) {
         //console.log("getCurrent for clone");
         const current = getCurrent(currentState);
         parent = scenes[current.modal ? current.sceneKey : current.parent];
-        //console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, sceneProps);
+        console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, Object.keys(scene));
         const passProps = {...sceneProps, ...props};
-        parent.ref.push({...scene, id: scene.key, passProps, title:passProps.title, style: styles});
+        parent.ref.push({component:scene.component, id: scene.key, passProps, title:passProps.title, style: styles});
       } else {
         if (parent){
-          //console.log("PUSH PROPS", parent.ref, props);
+          console.log("PUSH PROPS", parent.ref, props, sceneProps);
           parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}, style: styles});
         }
       }
