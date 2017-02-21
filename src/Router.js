@@ -283,7 +283,7 @@ function actionCallbackCreate(scenes) {
       id = currentScene.sceneKey;
     }
     const scene = scenes[id] || {};
-    console.log("ACTION:", props, "CURRENT SCENE2:", id, scene.ref);
+    //console.log("ACTION:", props, "CURRENT SCENE2:", id, scene.ref);
     if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
       console.log("CANCELLED", Actions.isTransition);
       return;
