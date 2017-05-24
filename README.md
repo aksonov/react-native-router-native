@@ -7,7 +7,8 @@ Detailed motivation is explained here: https://github.com/aksonov/react-native-c
 
 ## Example
 Check Example iOS project (it is simular to react-native-router-flux demo)
-```
+
+```jsx
 import React, {
   Component,
 } from 'react';
