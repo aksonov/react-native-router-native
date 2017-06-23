@@ -1,67 +1,30 @@
-import React, {
-  Component,
-} from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import Launch from './components/Launch';
-import Register from './components/Register';
-import Login from './components/Login';
-import TabView from './components/TabView';
-import {
-  Scene,
-  Router,
-} from 'react-native-router-native';
-import Error from './components/Error';
+import React from 'react';
+import { AppRegistry } from 'react-native';
+import {StackNavigator, TabNavigator} from 'react-navigation';
+import {Router, Scene} from 'react-native-router-flux';
 
-Router(<Scene key="root" >
-  <Scene key="launch" component={Launch} title="Launch" hideNavBar />
-  <Scene key="register" component={Register} title="Register" />
-  <Scene key="login" component={Login} title="Login" modal/>
-  <Scene key="tabbar" drawer >
-    <Scene key="main" tabs>
-      <Scene
-        key="tab1"
-        title="Tab #1"
-        style={{ navBarBackgroundColor: 'red' }}
-        titleStyle={{ color: 'white' }}
-      >
-        <Scene
-          key="tab1_1"
-          component={TabView}
-          title="Tab #1_1"
-          onRight={() => alert('Right button')}
-          rightTitle="Right"
-        />
-        <Scene
-          key="tab1_2"
-          component={TabView}
-          title="Tab #1_2"
-          titleStyle={{ color: 'black' }}
-        />
-      </Scene>
-      <Scene key="tab2" initial title="Tab #2" >
-        <Scene
-          key="tab2_1"
-          component={TabView}
-          title="Tab #2_1"
-          renderRightButton={() => <Right />}
-        />
-        <Scene
-          key="tab2_2"
-          component={TabView}
-          title="Tab #2_2"
-          hideBackImage
-          onBack={() => alert('Left button!')}
-          backTitle="Left"
-        />
-      </Scene>
-      <Scene key="tab3" component={TabView} title="Tab #3"  />
-      <Scene key="tab4" component={TabView} title="Tab #4" hideNavBar />
-      <Scene key="tab5" component={TabView} title="Tab #5" hideTabBar />
-    </Scene>
+import Launch from './components/Launch';
+import Login from './components/Login';
+import Login2 from './components/Login2';
+import TabView from './components/TabView';
+
+// const SimpleApp = TabNavigator({
+//   Home: { screen: Launch },
+//   TabView: {screen: TabView}
+//
+// },{
+//   navigationOptions: {header: null, tabBarVisible: false}
+//
+// });
+//
+
+const App = Router(<Scene hideTabBar tabs>
+  <Scene key="launch" component={Launch} />
+  <Scene key="loginContainer" modal>
+    <Scene key="login" component={Login} title="Login!!!"/>
+    <Scene key="login2" component={Login} title="Login2"/>
   </Scene>
-  <Scene key="error" component={Error} lightbox/>
 </Scene>);
+
+
+AppRegistry.registerComponent('Example', () => App);

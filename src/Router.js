@@ -1,484 +1,295 @@
-/**
- * Copyright (c) 2015-present, Pavel Aksonov
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree.
- *
- */
-import Controllers from 'react-native-ios-controllers';
-const {Modal} = Controllers;
-import {assert} from './Util';
-const React = Controllers.hijackReact();
-import {AppRegistry, NativeModules, NativeEventEmitter} from 'react-native';
-const {
-    ControllerRegistry,
-    TabBarControllerIOS,
-    NavigationControllerIOS,
-    ViewControllerIOS,
-    DrawerControllerIOS,
-    CubeBarControllerIOS,
-} = React;
-const eventEmitter = new NativeEventEmitter(NativeModules.RCCEventEmitter);
+import React from 'react';
+import {observable, computed, toJS} from 'mobx';
+import {observer} from 'mobx-react/native';
+import autobind from 'autobind-decorator';
+import navigationStore from './navigationStore';
+import Scene from './Scene';
+import { assert } from './Util';
 
-import Actions, {ActionMap} from './Actions';
-import createState from './State';
-import createReducer, {getCurrent} from './Reducer';
-import * as ActionConst from './ActionConst';
+import {TabNavigator, DrawerNavigator, StackNavigator, NavigationActions, addNavigationHelpers} from 'react-navigation';
+// import StackNavigator from './components/nav/navigators/StackNavigator';
+// import TabNavigator from './components/nav/navigators/TabNavigator';
+// import DrawerNavigator from './components/nav/navigators/DrawerNavigator';
+// import NavigationActions from './components/nav/NavigationActions';
+// import addNavigationHelpers from './components/nav/addNavigationHelpers';
+const reservedKeys = [
+  'navigate',
+  'currentState',
+  'refresh',
+  'dispatch',
+  'push',
+  'setParams',
+  'back',
+  'pop'
+];
 
-function registerListener(scene) {
-    const id = scene.key;
-    if (scene.state) {
-        scene.state.listener = {
-            onEnter: (props) => {
-                console.log("RUN ACTION ", id);
-                Actions[id](props);
-                //InteractionManager.runAfterInteractions(()=>Actions[root.key](props));
-            },
-            onExit: (props) => {
-                //console.log("RUN POP?");
-                ///Actions.pop();
-            }
-        };
-    } else {
-        //console.log(`Scene ${scene.key} doesn't have state`)
-    }
+function filterParam(data) {
+  if (data.toString() !== '[object Object]') {
+    return {data};
+  }
+  const proto = (data || {}).constructor.name;
+  // avoid passing React Native parameters
+  if (!data || (proto !== 'Object')) {
+    return {};
+  }
+  return data;
 }
 
-function merge(target, source) {
-
-    /* Merges two (or more) objects,
-     giving the last one precedence */
-
-    if (typeof target !== 'object') {
-        target = {};
-    }
-
-    for (var property in source) {
-
-        if (source.hasOwnProperty(property)) {
-
-            var sourceProperty = source[property];
-
-            if (typeof sourceProperty === 'object') {
-                target[property] = merge(target[property], sourceProperty);
-                continue;
-            }
-
-            target[property] = sourceProperty;
-
-        }
-
-    }
-
-    for (var a = 2, l = arguments.length; a < l; a++) {
-        merge(target, arguments[a]);
-    }
-
-    return target;
+function getValue(value, params) {
+  return value instanceof Function ? value(params) : value;
 }
 
-function registerButtons(scene, parent = {}) {
-    if (scene.modal && !scene.leftTitle && !scene.leftButton) {
-        const styles = clone({...parent.style, ...scene.style});
-        scene.leftButton = {
-            title: 'Cancel',
-            fontFamily: styles.navBarFontFamily,
-            textColor: styles.navBarCancelColor,
-            onPress: () => Actions.pop()
-        };
+function createNavigationOptions({title, hideNavBar, hideTabBar, backTitle, right, left, headerStyle}) {
+  return ({navigation, screenProps}) => {
+    if (hideTabBar) {
+      return {
+        tabBarVisible: false
+      };
     }
-    if (!scene.rightButtons && scene.onRight) {
-        if (scene.rightTitle) {
-            scene.rightButtons = [{title: scene.rightTitle, onPress: scene.onRight || scene.component.onRight}];
-        } else {
-            scene.rightButtons = [{icon: scene.rightButtonImage, onPress: scene.onRight || scene.component.onRight}];
-        }
+    if (hideNavBar) {
+      return {
+        header: null
+      };
     }
-    if (!scene.rightButtons && scene.rightButton) {
-        scene.rightButtons = [scene.rightButton];
+
+    return {
+      title: getValue((navigation.state.params && navigation.state.params.title) || title, {...navigation.state.params, ...screenProps}),
+      headerBackTitle: getValue((navigation.state.params && navigation.state.params.backTitle) || backTitle, {...navigation.state.params, ...screenProps}),
+      headerRight: getValue((navigation.state.params && navigation.state.params.right) || right, {...navigation.state.params, ...screenProps}),
+      headerLeft: getValue((navigation.state.params && navigation.state.params.left) || left, {...navigation.state.params, ...screenProps}),
+      headerStyle: getValue((navigation.state.params && navigation.state.params.headerStyle || headerStyle), {...navigation.state.params, ...screenProps}),
     }
-    if (!scene.rightButtons && parent.rightButtons) {
-        scene.rightButtons = parent.rightButtons;
-    }
-    if (!scene.leftButtons && scene.onLeft) {
-        if (scene.leftTitle) {
-            scene.leftButtons = [{title: scene.leftTitle, onPress: scene.onLeft || scene.component.onLeft}];
-        } else {
-            scene.leftButtons = [{icon: scene.leftButtonImage, onPress: scene.onLeft || scene.component.onLeft}];
-        }
-    }
-    if (!scene.leftButtons && scene.leftButton) {
-        scene.leftButtons = [scene.leftButton];
-    }
-    if (!scene.leftButtons && parent.leftButtons) {
-        scene.leftButtons = parent.leftButtons;
-    }
-    delete scene.leftButton;
-    delete scene.rightButton;
-    delete scene.onRight;
-    delete scene.onLeft;
-    delete scene.rightTitle;
-    delete scene.leftTitle;
-    delete scene.rightButtonImage;
-    delete scene.leftButtonImage;
+  }
 }
 
-function createStyles(scene, parent = {}) {
-    const styles = clone({...parent.style, ...scene.style});
-    if (scene.hideNavBar) {
-        styles.navBarHidden = true;
-    }
-    if (scene.hideNavBar === false) {
-        styles.navBarHidden = false;
-    }
-    if (scene.navTransparent) {
-        styles.drawUnderNavBar = true;
-        styles.navBarTranslucent = true;
-        styles.navBarTransparent = true;
-    }
-    if (scene.navTransparent === false) {
-        styles.drawUnderNavBar = false;
-        styles.navBarTranslucent = false;
-        styles.navBarTransparent = false;
-    }
-    if (scene.hideTabBar) {
-        styles.tabBarHidden = true;
-    }
-    return styles;
+@observer
+class Renderer extends React.Component {
+  render() {
+    const Component = this.props.router.screen;
+    return <Component navigation={addNavigationHelpers({state: this.props.router.state, dispatch: this.props.router.dispatch})}/>
+  }
 }
 
-function registerComponent(scene) {
-    for (let value of ['component', 'componentRight', 'componentLeft']) {
-        if (scene[value]) {
-            const comp = scene[value];
-            AppRegistry.registerComponent(scene.key + value, () => comp);
-            scene[value] = scene.key + value;
-        }
-    }
+// @autobind
+// export default class Router {
+//   _names = {};
+//   _scenes = null;
+//   _converted = {};
+//   _root = null;
+//   _rootKey;
+//   @observable screen;
+//   @observable _state;
+//   @computed get state() {
+//     return toJS(this._state);
+//   }
+//
+//   create(props) {
+//     this.screen = null;
+//     this._state = null;
+//     try {
+//       console.log("CREATE SCENES", this._scenes, this.screen);
+//       this.screen = this.convertScene(this._root, this._rootKey).screen;
+//       this.dispatch(NavigationActions.init());
+//       return props => <Renderer router={this}/>
+//     } catch (e) {
+//       console.log("ERROR:", e);
+//     }
+//
+//   }
+//
+//   constructor(scenes = {}) {
+//     this._scenes = scenes;
+//     for (const key of Object.keys(scenes)) {
+//       const scene = scenes[key];
+//       if (scene.initial) {
+//         if (this._root) {
+//           throw `initial must be unique: ${this._root}, ${scene}`;
+//         } else {
+//           if (!scene.children) {
+//             throw `Root scene "${key}" must have children`;
+//           }
+//           this._root = scene;
+//           this._rootKey = key;
+//         }
+//       }
+//       if (reservedKeys.indexOf(key) !== -1) {
+//         throw `Scene name cannot be reserved word: ${key}`;
+//       }
+//       if (!scene.component && !scene.children) {
+//         throw `component or children property should be defined for scene '${key}'`;
+//       }
+//
+//       if (!this[key]) {
+//         // a bit of magic ;)
+//         this[key] = new Function('actions', `return function ${key}(params){ actions.push('${key}', params)}`)(this);
+//         this._names[this[key]] = key;
+//       }
+//     }
+//
+//     if (!this._root) {
+//       throw 'No root scene is defined, please set initial property to true for root scene';
+//     }
+//     //setTimeout((()=>this.init()));
+//   }
+//
+//   convertScene(scene, key) {
+//     if (!key) {
+//       throw `key cannot be null for scene ${JSON.stringify(scene)}`;
+//     }
+//     const {children, component, hideNavBar, modal, ...props} = scene;
+//     let screen = component;
+//     if (!screen) {
+//       const children = this._getChildren(scene);
+//       if (scene.tabs) {
+//         screen = TabNavigator(children, scene);
+//       } else if (scene.drawer) {
+//         screen = DrawerNavigator(children, scene);
+//       } else {
+//
+//         screen = StackNavigator(children, {
+//           mode: modal ? 'modal' : 'card',
+//           initialRouteParams: children[this._names[scene.children()[0]]]
+//         });
+//       }
+//     }
+//     this._converted[key] = {screen, navigationOptions, ...props};
+//     if (hideNavBar) {
+//       this._converted[key].navigationOptions = () => ({header: null});
+//     }
+//     return this._converted[key];
+//   }
+//
+//   _getChildren(scene) {
+//     if (!scene.children) {
+//       return scene;
+//     }
+//     const children = scene.children();
+//     if (!Array.isArray(children)) {
+//       throw `Scene ${scene.key} children() is not Array`;
+//     }
+//     const res = {};
+//     for (const f of children) {
+//       if (!this._names[f] || !this._scenes[this._names[f]]) {
+//         throw `Cannot found children ${JSON.stringify(f)} for scene '${JSON.stringify(scene)}`;
+//       }
+//       const name = this._names[f];
+//       res[name] = this.convertScene(this._scenes[name], name);
+//     }
+//     return res;
+//   }
+//
+//   dispatch(action) {
+//     this._state = this.screen.router.getStateForAction(action, this._state);
+//   }
+//
+//   currentState(state) {
+//     if (!state) {
+//       state = this._state;
+//     }
+//     if (!state.routes) {
+//       return state;
+//     } else {
+//       return this.currentState(state.routes[state.index]);
+//     }
+//   }
+//
+//   push(routeName, params) {
+//     this.dispatch(NavigationActions.navigate({
+//       routeName,
+//       params: {...this._converted[routeName], ...filterParam(params)}
+//     }));
+//   }
+//
+//   refresh(params) {
+//     const key = this.currentState(this.state).key;
+//     this.dispatch(NavigationActions.setParams({key, params}));
+//   }
+//
+//   pop() {
+//     this.dispatch(NavigationActions.back());
+//   }
+//
+// }
+
+@observer
+@autobind
+class App extends React.Component {
+
+  render() {
+    const AppNavigator = this.props.navigator;
+    return (
+      <AppNavigator navigation={addNavigationHelpers({
+        dispatch: this.props.store.dispatch,
+        state: this.props.store.state,
+      })} />
+    );
+  }
 }
 
-function clone(obj) {
-    if (Array.isArray(obj)) {
-        return obj.map(x => clone(x));
+// @autobind
+// export default class Router {
+//   navigator;
+//   store;
+//
+//   constructor(scenes){
+//     this.navigator = StackNavigator(scenes);
+//     this.store = new NavigationStore(this.navigator.router);
+//   }
+//
+//   app(){
+//     return () => <App navigator={this.navigator} store={this.store} />
+//
+//   }
+// }
+
+function processScene(scene: Scene, inheritProps) {
+  assert(scene.props, 'props should be defined');
+  if (!scene.props.children) {
+    throw `children property should be defined`;
+  }
+  const res = {};
+  const order = [];
+  const {tabs, modal, drawer, ...parentProps} = scene.props;
+  const children = !Array.isArray(parentProps.children) ? [parentProps.children] : parentProps.children;
+  let initialRouteName, initialRouteParams;
+  for (const child of children) {
+    assert(child.key, `key should be defined for ${child}`);
+    if (reservedKeys.indexOf(key) !== -1) {
+      throw `Scene name cannot be reserved word: ${child.key}`;
     }
-    if (obj == null || typeof(obj) != 'object') {
-        return obj;
+    const {component, children, ...props} = child.props;
+    const key = child.key;
+    res[key] = {
+      screen: component || processScene(child, parentProps),
+      navigationOptions: createNavigationOptions(child.props)
+    };
+
+    // a bit of magic, create all 'actions'-shortcuts inside navigationStore
+    if (!navigationStore[key]) {
+      navigationStore[key] = new Function('actions', 'props', `return function ${key}(params){ actions.push('${key}', Object.assign({}, props, params))}`)(navigationStore, props);
     }
-    var temp = new obj.constructor();
-
-    for (var key in obj) {
-
-        if (obj.hasOwnProperty(key)) {
-            if (key != 'state') {
-                temp[key] = clone(obj[key]);
-            }
-        }
+    order.push(key);
+    if (child.props.initial || !initialRouteName) {
+      initialRouteName = key;
+      initialRouteParams = props;
     }
-
-    return temp;
-}
-function findRoot(scenes, key, parent = {}, index) {
-    const id = key;
-    const scene = scenes[key];
-    let component = scene.component;
-    scene.index = index;
-
-    registerListener(scene);
-    registerButtons(scene, parent);
-    registerComponent(scene);
-
-    const styles = createStyles(scene, parent);
-    if (scene.modal) {
-        scene.style = styles;
-    }
-    if (scene.tabs) {
-        if (scene.cube) {
-            scene.ref = Controllers.CubeBarControllerIOS(id);
-            return <CubeBarControllerIOS id={id} {...clone(scene)} style={styles}>
-                {scene.children
-                    .map((el, i) => {
-                        const res = findRoot(scenes, el, scene, i);
-                        return res && !scenes[el].clone &&
-                            <CubeBarControllerIOS.Item {...clone(scenes[el])}>{res}</CubeBarControllerIOS.Item>;
-                    }).filter(el => el)}
-            </CubeBarControllerIOS>
-        } else {
-            scene.ref = Controllers.TabBarControllerIOS(id);
-            return <TabBarControllerIOS id={id} {...clone(scene)} style={styles}>
-                {scene.children
-                    .map((el, i) => {
-                        const res = findRoot(scenes, el, scene, i);
-                        return res && !scenes[el].clone &&
-                            <TabBarControllerIOS.Item {...clone(scenes[el])}>{res}</TabBarControllerIOS.Item>;
-                    }).filter(el => el)}
-            </TabBarControllerIOS>
-        }
-    } else {
-        if (scene.subStates) {
-            scene.subStates.forEach(el => {
-                registerListener(scenes[el]);
-                registerButtons(scenes[el], scene);
-            });
-        }
-        if (scene.component) {
-            let props = {...scene};
-            delete props.state;
-            if (props.modal) {
-                scene.ref = Controllers.NavigationControllerIOS(id);
-                ControllerRegistry.registerController(id, () => Controllers.createClass({
-                    render(){
-                        const currentStyles = {...scenes[id].style, navBarHidden: false};
-                        return <NavigationControllerIOS id={id} {...clone(props)} passProps={clone(props)}
-                                                        style={currentStyles}/>
-                    }
-                }));
-                return null;
-            }
-            if (props.lightbox) {
-                return null;
-            }
-            if (props.clone) {
-                return null;
-            }
-            scene.ref = Controllers.ViewControllerIOS(id);
-            return <ViewControllerIOS id={id} {...clone(props)} passProps={clone(props)} style={styles}/>;
-        } else {
-            if (scene.drawer) {
-                scene.ref = Controllers.DrawerControllerIOS(id);
-                return <DrawerControllerIOS animationType='slide' id={scene.key} {...clone(scene)} type="MMDrawer">
-                    {findRoot(scenes, scene.children[0], scene, undefined)}
-                </DrawerControllerIOS>;
-            } else {
-                scene.ref = Controllers.NavigationControllerIOS(id);
-                const props = {...scene};
-                const children = scene.children;
-                // empty left buttons for all children
-                scene.children.forEach((el, i) => {
-                    if (!scenes[el].modal && i && !(scenes[el].type === 'reset')) {
-                        scenes[el].leftButtons = [];
-                    }
-                });
-                const res = <NavigationControllerIOS id={id} {...clone(props)} style={styles}>
-                    {children.map((el, i) => findRoot(scenes, el, scene, i))}
-                </NavigationControllerIOS>;
-
-                if (scene.modal) {
-                    ControllerRegistry.registerController(id, () => Controllers.createClass({
-                        render(){
-                            return res
-
-                        }
-                    }));
-                    return null;
-                }
-                return res;
-            }
-        }
-    }
+  }
+  const mode = modal ? 'modal' : 'card';
+  if (tabs) {
+    return TabNavigator(res, {initialRouteParams, order, navigationOptions: createNavigationOptions(parentProps) });
+  } else if (drawer) {
+    return DrawerNavigator(res);
+  } else {
+    return StackNavigator(res, { mode, initialRouteParams, initialRouteName, navigationOptions: createNavigationOptions(parentProps) });
+  }
 }
 
-function actionCallbackCreate(scenes) {
-    let currentState = undefined;
-    let nextState = undefined;
-    let currentScene = undefined;
-    const reducer = createReducer({initialState: createState(scenes), scenes});
-    return (props = {}) => {
-        currentState = nextState;
-        if (!currentState) {
-            currentState = reducer(null, {});
-        }
-        let id = props.key;
-        currentScene = getCurrent(currentState);
-        if (!id) {
-            id = currentScene.sceneKey;
-        }
-        const scene = scenes[id] || {};
-        //console.log("ACTION:", props, "CURRENT SCENE2:", id, scene.ref);
-        if (Actions.isTransition && scene.drawerDisableSwipe && !props.force) {
-            console.log("CANCELLED", Actions.isTransition);
-            return;
-        }
-        nextState = reducer(currentState, props);
-        const parent = scenes[props.parent || scene.parent || scene.base];
-        //console.log("PARENT:", parent && parent.key);
-        let {component, state, style, ref, rightButtons, leftButtons, ...sceneProps} = scene;
-        if (!leftButtons) {
-            leftButtons = [];
-        }
-        if (!rightButtons) {
-            rightButtons = [];
-        }
-        const newProps = {...sceneProps, ...props};
-        const styles = createStyles(newProps);
-        if (props.type === ActionConst.BACK_ACTION || props.type === ActionConst.BACK) {
-            if (currentScene.lightbox) {
-                Modal.dismissLightBox();
-            } else if (currentScene.modal) {
-                    Modal.dismissController(currentScene.animationType);
-                    if (currentScene.state) {
-                        console.log("CALL POP FOR STATE", currentScene.sceneKey, currentScene.parent);
-                        currentScene.state.parent.pop();
-                    }
-            } else if (currentScene.parent && scenes[currentScene.parent].ref && scenes[currentScene.parent].ref.pop) {
-                if (currentScene.state) {
-                    console.log("CALL POP FOR STATE", currentScene.sceneKey, currentScene.parent);
-                    currentScene.state.parent.pop();
-                }
-                if (scenes[currentScene.parent].modal && (scenes[currentScene.parent].children.indexOf(currentScene.sceneKey) === 0 || currentScene.type === 'reset')) {
-                    Modal.dismissController(scenes[currentScene.parent].animationType);
-                    if (currentScene.state) {
-                        console.log("CALL POP FOR STATE", currentScene.sceneKey, currentScene.parent);
-                        currentScene.state.parent.pop();
-                    }
-                } else {
-                    if (!props.alreadyPop) {
-                        console.log("DO POP", props.alreadyPop, props.animated);
-                        let animated = props.animated;
-                        if (animated === undefined) {
-                            animated = currentScene.animated;
-                        }
-                        scenes[currentScene.parent].ref.pop({animated: animated === undefined ? true : animated});
-                    }
-                }
-            }
-        } else if (props.type === ActionConst.REFRESH) {
-            let obj = ref || scenes[scene.base || scene.parent].ref;
-            if (scene.clone) {
-                const current = getCurrent(currentState);
-                const cloneParent = scenes[current.modal ? current.sceneKey : current.parent];
-                console.log("GET PARENT FOR CLONE", current.sceneKey, cloneParent.key);
-                obj = cloneParent.ref;
-            }
-            if (obj.setStyle && Object.keys(styles).length) {
-                //obj.setStyle(clone(styles));
-                // check modal children
-                if (scene.children) {
-                    scene.children.forEach(el => {
-                        if (scenes[el].modal) {
-                            //console.log("REFRESH MODAL:", scenes[el].ref);
-                            const modalStyles = {...styles};
-                            delete modalStyles.hideNavBar;
-                            //console.log("REFRESH MODAL:", {...modalStyles});
-                            scenes[el].ref.setStyle({...modalStyles});
-                            scenes[el].style = {...scenes[el].style, ...modalStyles};
-                        }
-                    })
-                }
-            }
-            let refreshProps = clone(newProps);
-            registerButtons(refreshProps);
-            refreshProps = merge(clone({leftButtons, rightButtons}), refreshProps);
-            console.log("REFRESH", obj, refreshProps.rightButtons, refreshProps.leftButtons, leftButtons);
-            if (scene.unsubscribes) {
-                scene.unsubscribes.forEach(unsubscribe => unsubscribe());
-            }
-            scene.unsubscribes = [];
-            if (obj.setRightButtons && refreshProps.rightButtons) {
-                //console.log("SETRIGHTBUTTONS");
-                scene.unsubscribes.push(obj.setRightButtons(clone(refreshProps.rightButtons)));
-            }
-            if (obj.setLeftButtons && refreshProps.leftButtons) {
-                //console.log("SETLEFTBUTTONS",scene.leftButtons, JSON.stringify(refreshProps.leftButtons));
-                scene.unsubscribes.push(obj.setLeftButtons(clone(refreshProps.leftButtons)));
-            }
-            delete refreshProps.hideNavBar;
-            delete refreshProps.hideTabBar;
-            delete refreshProps.key;
-            delete refreshProps.unsubscribes;
-            delete refreshProps.sceneKey;
-            delete refreshProps.name;
-            delete refreshProps.children;
-            delete refreshProps.tabs;
-            delete refreshProps.base;
-            delete refreshProps.parent;
-            delete refreshProps.index;
-            delete refreshProps.type;
-            delete refreshProps.rightButtons;
-            delete refreshProps.leftButtons;
-            if (obj.refresh && Object.keys(refreshProps).length) {
-                //console.log("OBJ REFRESH", refreshProps)
-                obj.refresh(refreshProps);
-            }
-        } else if (props.type === ActionConst.PUSH && !scene.modal && !scene.lightbox) {
-            if (currentScene && getCurrent(nextState).sceneKey === currentScene.sceneKey) {
-                //console.log("IGNORE PUSH ACTION BECAUSE OF THE SAME SCENE");
-                nextState = currentState;
-                return;
-            }
-            let parent = scenes[scene.parent]
-            if (scene.clone) {
-                //console.log("getCurrent for clone");
-                const current = getCurrent(currentState);
-                parent = scenes[current.modal ? current.sceneKey : current.parent];
-                console.log("GET PARENT FOR CLONE", current.sceneKey, parent.key, Object.keys(scene));
-                const passProps = {...sceneProps, ...props};
-                parent.ref.push({
-                    component: scene.component,
-                    id: scene.key,
-                    passProps,
-                    title: passProps.title,
-                    style: styles
-                });
-            } else {
-                if (parent) {
-                    console.log("PUSH PROPS", parent.ref, props, sceneProps);
-                    parent.ref.push({id: scene.key, passProps: {...sceneProps, ...props}, style: styles});
-                }
-            }
-        } else if (props.type === 'reset') {
-            //console.log("RESET ACTION!", scene.key, scene.leftButtons, sceneProps.leftButtons);
-            parent.ref.resetTo(clone({...scene, id: scene.key, passProps: {...sceneProps, ...props}, style: styles}));
-        } else if (scene.modal) {
-            Modal.showController(scene.key, scene.animationType, {...sceneProps, ...props, style: styles});
-        } else if (scene.lightbox) {
-            Modal.showLightBox({
-                passProps: {...sceneProps, ...props}, style: {
-                    backgroundBlur: "dark"
-                }, ...scene
-            });
-        } else if (parent && parent.tabs) {
-            if (parent.cube) {
-                //console.log("SWITCH CUBE", scene.index);
-                parent.ref.switchTo({tabIndex: scene.index});
-            } else {
-                //console.log("SWITCH TAB", scene.index);
-                parent.ref.switchTo({tabIndex: scene.index});
-            }
-        }
-    }
-}
+export default (scene: Scene) => {
+  const AppNavigator = processScene(scene);
+  navigationStore.router = AppNavigator.router;
 
-function createRouter(scenes, props) {
-    const {wrapBy, createReducer, reducer} = props;
-    assert(scenes, "No root scene is defined");
-    assert(scenes.key, "No root scene key is defined");
-    const scenesMap = Actions.create(scenes, wrapBy);
-
-    //console.log("SCENES:", Object.keys(Actions));
-    const root = findRoot(scenesMap, scenes.key, undefined);
-    Actions.get = id => scenesMap[id];
-    Actions.callback = actionCallbackCreate(scenesMap);
-    eventEmitter.addListener('WillPop', (data) => {
-        console.log("ONPOP");
-        Actions.pop({alreadyPop: true});
-        props.onPop && props.onPop(data)
-    });
-    eventEmitter.addListener('WillTransition', (event) => {
-        Actions.willTransition && Actions.willTransition(event);
-        Actions.isTransition = true
-    });
-    eventEmitter.addListener('DidTransition', () => {
-        Actions.didTransition && Actions.didTransition();
-        Actions.isTransition = false
-    });
-    return Controllers.createClass({
-        render(){
-            return root;
-        }
-    })
+  return observer(()=><AppNavigator navigation={addNavigationHelpers({
+    dispatch: navigationStore.dispatch,
+    state: navigationStore.state,
+  })} />);
 }
-export default (scenes, props = {}) => {
-    ControllerRegistry.registerController('Router', () => createRouter(scenes, props));
-    ControllerRegistry.setRootController('Router', 'none', props);
-};

@@ -1,13 +1,17 @@
-import Actions from './src/Actions';
-import * as ActionConst from './src/ActionConst';
-import Router from './src/Router';
-import Scene from './src/Scene';
-import Util from './src/Util';
+/* @flow */
+/* eslint-disable import/no-commonjs */
 
-export {
-  Actions,
-  ActionConst,
-  Router,
-  Scene,
-  Util,
+module.exports = {
+  get Actions() {
+    return require('./src/navigationStore').default;
+  },
+  get Router() {
+    return require('./src/Router').default;
+  },
+  get navigationStore() {
+    return require('./src/navigationStore').default;
+  },
+  get Scene() {
+    return require('./src/Scene').default;
+  },
 };
