@@ -19,6 +19,9 @@ const reservedKeys = [
   'push',
   'setParams',
   'back',
+  'onEnter',
+  'on',
+  'onExit',
   'pop'
 ];
 
@@ -38,7 +41,7 @@ function getValue(value, params) {
   return value instanceof Function ? value(params) : value;
 }
 
-function createNavigationOptions({title, hideNavBar, hideTabBar, backTitle, right, left, headerStyle}) {
+function createNavigationOptions({title, navTransparent, hideNavBar, hideTabBar, backTitle, right, left, headerStyle}) {
   return ({navigation, screenProps}) => {
     if (hideTabBar) {
       return {
@@ -51,7 +54,14 @@ function createNavigationOptions({title, hideNavBar, hideTabBar, backTitle, righ
       };
     }
 
+    if (navTransparent) {
+      return {
+        headerStyle:{ position: 'absolute', backgroundColor: 'transparent', zIndex: 100, top: 0, left: 0, right: 0 }
+      }
+    }
+
     return {
+      //headerTintColor: 'black',
       title: getValue((navigation.state.params && navigation.state.params.title) || title, {...navigation.state.params, ...screenProps}),
       headerBackTitle: getValue((navigation.state.params && navigation.state.params.backTitle) || backTitle, {...navigation.state.params, ...screenProps}),
       headerRight: getValue((navigation.state.params && navigation.state.params.right) || right, {...navigation.state.params, ...screenProps}),
@@ -211,15 +221,15 @@ class Renderer extends React.Component {
 // }
 
 @observer
-@autobind
 class App extends React.Component {
 
   render() {
     const AppNavigator = this.props.navigator;
+    console.log("NEW STATE:", JSON.stringify(navigationStore._state), JSON.stringify(navigationStore.currentState()));
     return (
       <AppNavigator navigation={addNavigationHelpers({
-        dispatch: this.props.store.dispatch,
-        state: this.props.store.state,
+        dispatch: navigationStore.dispatch,
+        state: navigationStore.state,
       })} />
     );
   }
@@ -248,16 +258,30 @@ function processScene(scene: Scene, inheritProps) {
   }
   const res = {};
   const order = [];
-  const {tabs, modal, drawer, ...parentProps} = scene.props;
+  const {tabs, modal, lazy, drawer, ...parentProps} = scene.props;
   const children = !Array.isArray(parentProps.children) ? [parentProps.children] : parentProps.children;
   let initialRouteName, initialRouteParams;
   for (const child of children) {
     assert(child.key, `key should be defined for ${child}`);
+    const key = child.key;
     if (reservedKeys.indexOf(key) !== -1) {
       throw `Scene name cannot be reserved word: ${child.key}`;
     }
-    const {component, children, onEnter, onExit, ...props} = child.props;
-    const key = child.key;
+    const {component, children, onEnter, onExit, on, failure, success, ...props} = child.props;
+    if (!navigationStore.states[key]){
+      navigationStore.states[key] = {};
+    }
+    for (const transition of Object.keys(props)) {
+      if (transition[props] instanceof Function) {
+        navigationStore.states[key][transition] = props[transition];
+      }
+    }
+    if (success) {
+      navigationStore.states[key].success = success instanceof Function ? success : ()=>navigationStore[success]();
+    }
+    if (failure) {
+      navigationStore.states[key].failure = failure instanceof Function ? failure : ()=>{console.log(`Failure ${key}, go to state=${failure}`);navigationStore[failure]();}
+    }
     res[key] = {
       screen: component || processScene(child, parentProps),
       navigationOptions: createNavigationOptions(child.props)
@@ -268,8 +292,8 @@ function processScene(scene: Scene, inheritProps) {
       navigationStore[key] = new Function('actions', 'props', `return function ${key}(params){ actions.push('${key}', Object.assign({}, props, params))}`)(navigationStore, props);
     }
 
-    if (onEnter && !navigationStore[key+OnEnter]) {
-      navigationStore[key+OnEnter] = onEnter;
+    if ((onEnter || on) && !navigationStore[key+OnEnter]) {
+      navigationStore[key+OnEnter] = onEnter || on;
     }
 
     if (onExit && !navigationStore[key+OnExit]) {
@@ -284,7 +308,7 @@ function processScene(scene: Scene, inheritProps) {
   }
   const mode = modal ? 'modal' : 'card';
   if (tabs) {
-    return TabNavigator(res, {initialRouteParams, order, navigationOptions: createNavigationOptions(parentProps) });
+    return TabNavigator(res, {lazy, initialRouteParams, order, navigationOptions: createNavigationOptions(parentProps) });
   } else if (drawer) {
     return DrawerNavigator(res);
   } else {
@@ -296,8 +320,5 @@ export default (scene: Scene) => {
   const AppNavigator = processScene(scene);
   navigationStore.router = AppNavigator.router;
 
-  return observer(()=><AppNavigator navigation={addNavigationHelpers({
-    dispatch: navigationStore.dispatch,
-    state: navigationStore.state,
-  })} />);
+  return ()=> <App navigator={AppNavigator} />;
 }
