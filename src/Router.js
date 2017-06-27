@@ -83,12 +83,11 @@ function createNavigationOptions(params) {
     }
 
     if (rightButtonImage || onRight) {
-      res.headerRight = renderRightButton({...params, ...navigationParams});
+      res.headerRight = getValue((navigationParams.right) || right || rightButton || params.renderRightButton, {...navigationParams, ...screenProps}) || renderRightButton({...params, ...navigationParams});
     }
 
     if (leftButtonImage || onLeft || backButtonImage) {
-      console.log("INDEX:", JSON.stringify(navigation.state));
-      res.headerLeft = navigation.state.index ? renderBackButton({...params, ...navigationParams}) : renderLeftButton({...params, ...navigationParams});
+      res.headerLeft = getValue((navigationParams.left) || left || leftButton || params.renderLeftButton, {...navigationParams, ...screenProps}) || renderLeftButton({...params, ...navigationParams}) || renderBackButton({...params, ...navigationParams});
     }
 
     if (hideTabBar) {
