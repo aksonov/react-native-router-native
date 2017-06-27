@@ -6,11 +6,8 @@ import navigationStore from './navigationStore';
 import Scene from './Scene';
 import {OnEnter, OnExit,assert } from './Util';
 import {TabNavigator, DrawerNavigator, StackNavigator, NavigationActions, addNavigationHelpers} from 'react-navigation';
-// import StackNavigator from './components/nav/navigators/StackNavigator';
-// import TabNavigator from './components/nav/navigators/TabNavigator';
-// import DrawerNavigator from './components/nav/navigators/DrawerNavigator';
-// import NavigationActions from './components/nav/NavigationActions';
-// import addNavigationHelpers from './components/nav/addNavigationHelpers';
+import {renderRightButton, renderLeftButton, renderBackButton} from './NavBar';
+
 const reservedKeys = [
   'navigate',
   'currentState',
@@ -20,9 +17,31 @@ const reservedKeys = [
   'setParams',
   'back',
   'onEnter',
+  'onRight',
+  'onLeft',
+  'left',
+  'right',
+  'rightButton',
+  'leftButton',
   'on',
   'onExit',
-  'pop'
+  'pop',
+  'renderLeftButton',
+  'renderRightButton',
+  'navBar',
+  'title'
+];
+
+const dontInheritKeys = [
+  'component',
+  'children',
+  'key',
+  'ref',
+  'style',
+  'title',
+  'hideNavBar',
+  'hideTabBar',
+  'navTransparent',
 ];
 
 function filterParam(data) {
@@ -37,37 +56,52 @@ function filterParam(data) {
   return data;
 }
 
+
 function getValue(value, params) {
   return value instanceof Function ? value(params) : value;
 }
 
-function createNavigationOptions({title, navTransparent, hideNavBar, hideTabBar, backTitle, right, left, headerStyle}) {
+function createNavigationOptions(params) {
+  const {title, backButtonImage, navTransparent, hideNavBar, hideTabBar, backTitle, right, rightButton, left, leftButton,
+    navigationBarStyle, headerStyle, navBarButtonColor,
+    headerTitleStyle, titleStyle, navBar, onRight, onLeft, rightButtonImage, leftButtonImage} = params;
+  let NavBar = navBar;
   return ({navigation, screenProps}) => {
+    const navigationParams = navigation.state.params || {};
+    const res = {
+      headerTintColor: navBarButtonColor,
+      headerTitleStyle : headerTitleStyle || titleStyle,
+      title: getValue((navigationParams.title) || title, {...navigationParams, ...screenProps}),
+      headerBackTitle: getValue((navigationParams.backTitle) || backTitle, {...navigationParams, ...screenProps}),
+      headerRight: getValue((navigationParams.right) || right || rightButton || params.renderRightButton, {...navigationParams, ...screenProps}),
+      headerLeft: getValue((navigationParams.left) || left || leftButton || params.renderLeftButton, {...navigationParams, ...screenProps}),
+      headerStyle: getValue((navigationParams.headerStyle || headerStyle || navigationBarStyle), {...navigationParams, ...screenProps}),
+      headerBackImage: navigationParams.backButtonImage || backButtonImage,
+    }
+    if (NavBar) {
+      res.header = (props) => <NavBar navigation={navigation} {...params} />
+    }
+
+    if (rightButtonImage || onRight) {
+      res.headerRight = renderRightButton({...params, ...navigationParams});
+    }
+
+    if (leftButtonImage || onLeft || backButtonImage) {
+      console.log("INDEX:", JSON.stringify(navigation.state));
+      res.headerLeft = navigation.state.index ? renderBackButton({...params, ...navigationParams}) : renderLeftButton({...params, ...navigationParams});
+    }
+
     if (hideTabBar) {
-      return {
-        tabBarVisible: false
-      };
+      res.tabBarVisible = false
     }
     if (hideNavBar) {
-      return {
-        header: null
-      };
+      res.header = null;
     }
 
     if (navTransparent) {
-      return {
-        headerStyle:{ position: 'absolute', backgroundColor: 'transparent', zIndex: 100, top: 0, left: 0, right: 0 }
-      }
+      res.headerStyle = { position: 'absolute', backgroundColor: 'transparent', zIndex: 100, top: 0, left: 0, right: 0 }
     }
-
-    return {
-      //headerTintColor: 'black',
-      title: getValue((navigation.state.params && navigation.state.params.title) || title, {...navigation.state.params, ...screenProps}),
-      headerBackTitle: getValue((navigation.state.params && navigation.state.params.backTitle) || backTitle, {...navigation.state.params, ...screenProps}),
-      headerRight: getValue((navigation.state.params && navigation.state.params.right) || right, {...navigation.state.params, ...screenProps}),
-      headerLeft: getValue((navigation.state.params && navigation.state.params.left) || left, {...navigation.state.params, ...screenProps}),
-      headerStyle: getValue((navigation.state.params && navigation.state.params.headerStyle || headerStyle), {...navigation.state.params, ...screenProps}),
-    }
+    return res;
   }
 }
 
@@ -79,153 +113,12 @@ class Renderer extends React.Component {
   }
 }
 
-// @autobind
-// export default class Router {
-//   _names = {};
-//   _scenes = null;
-//   _converted = {};
-//   _root = null;
-//   _rootKey;
-//   @observable screen;
-//   @observable _state;
-//   @computed get state() {
-//     return toJS(this._state);
-//   }
-//
-//   create(props) {
-//     this.screen = null;
-//     this._state = null;
-//     try {
-//       console.log("CREATE SCENES", this._scenes, this.screen);
-//       this.screen = this.convertScene(this._root, this._rootKey).screen;
-//       this.dispatch(NavigationActions.init());
-//       return props => <Renderer router={this}/>
-//     } catch (e) {
-//       console.log("ERROR:", e);
-//     }
-//
-//   }
-//
-//   constructor(scenes = {}) {
-//     this._scenes = scenes;
-//     for (const key of Object.keys(scenes)) {
-//       const scene = scenes[key];
-//       if (scene.initial) {
-//         if (this._root) {
-//           throw `initial must be unique: ${this._root}, ${scene}`;
-//         } else {
-//           if (!scene.children) {
-//             throw `Root scene "${key}" must have children`;
-//           }
-//           this._root = scene;
-//           this._rootKey = key;
-//         }
-//       }
-//       if (reservedKeys.indexOf(key) !== -1) {
-//         throw `Scene name cannot be reserved word: ${key}`;
-//       }
-//       if (!scene.component && !scene.children) {
-//         throw `component or children property should be defined for scene '${key}'`;
-//       }
-//
-//       if (!this[key]) {
-//         // a bit of magic ;)
-//         this[key] = new Function('actions', `return function ${key}(params){ actions.push('${key}', params)}`)(this);
-//         this._names[this[key]] = key;
-//       }
-//     }
-//
-//     if (!this._root) {
-//       throw 'No root scene is defined, please set initial property to true for root scene';
-//     }
-//     //setTimeout((()=>this.init()));
-//   }
-//
-//   convertScene(scene, key) {
-//     if (!key) {
-//       throw `key cannot be null for scene ${JSON.stringify(scene)}`;
-//     }
-//     const {children, component, hideNavBar, modal, ...props} = scene;
-//     let screen = component;
-//     if (!screen) {
-//       const children = this._getChildren(scene);
-//       if (scene.tabs) {
-//         screen = TabNavigator(children, scene);
-//       } else if (scene.drawer) {
-//         screen = DrawerNavigator(children, scene);
-//       } else {
-//
-//         screen = StackNavigator(children, {
-//           mode: modal ? 'modal' : 'card',
-//           initialRouteParams: children[this._names[scene.children()[0]]]
-//         });
-//       }
-//     }
-//     this._converted[key] = {screen, navigationOptions, ...props};
-//     if (hideNavBar) {
-//       this._converted[key].navigationOptions = () => ({header: null});
-//     }
-//     return this._converted[key];
-//   }
-//
-//   _getChildren(scene) {
-//     if (!scene.children) {
-//       return scene;
-//     }
-//     const children = scene.children();
-//     if (!Array.isArray(children)) {
-//       throw `Scene ${scene.key} children() is not Array`;
-//     }
-//     const res = {};
-//     for (const f of children) {
-//       if (!this._names[f] || !this._scenes[this._names[f]]) {
-//         throw `Cannot found children ${JSON.stringify(f)} for scene '${JSON.stringify(scene)}`;
-//       }
-//       const name = this._names[f];
-//       res[name] = this.convertScene(this._scenes[name], name);
-//     }
-//     return res;
-//   }
-//
-//   dispatch(action) {
-//     this._state = this.screen.router.getStateForAction(action, this._state);
-//   }
-//
-//   currentState(state) {
-//     if (!state) {
-//       state = this._state;
-//     }
-//     if (!state.routes) {
-//       return state;
-//     } else {
-//       return this.currentState(state.routes[state.index]);
-//     }
-//   }
-//
-//   push(routeName, params) {
-//     this.dispatch(NavigationActions.navigate({
-//       routeName,
-//       params: {...this._converted[routeName], ...filterParam(params)}
-//     }));
-//   }
-//
-//   refresh(params) {
-//     const key = this.currentState(this.state).key;
-//     this.dispatch(NavigationActions.setParams({key, params}));
-//   }
-//
-//   pop() {
-//     this.dispatch(NavigationActions.back());
-//   }
-//
-// }
-
 @observer
 class App extends React.Component {
 
   render() {
     const AppNavigator = this.props.navigator;
-    console.log("NEW STATE:", JSON.stringify(navigationStore._state), JSON.stringify(navigationStore.currentState()));
+    //console.log("NEW STATE:", JSON.stringify(navigationStore._state), JSON.stringify(navigationStore.currentState()));
     return (
       <AppNavigator navigation={addNavigationHelpers({
         dispatch: navigationStore.dispatch,
@@ -235,23 +128,7 @@ class App extends React.Component {
   }
 }
 
-// @autobind
-// export default class Router {
-//   navigator;
-//   store;
-//
-//   constructor(scenes){
-//     this.navigator = StackNavigator(scenes);
-//     this.store = new NavigationStore(this.navigator.router);
-//   }
-//
-//   app(){
-//     return () => <App navigator={this.navigator} store={this.store} />
-//
-//   }
-// }
-
-function processScene(scene: Scene, inheritProps) {
+function processScene(scene: Scene, inheritProps = {}) {
   assert(scene.props, 'props should be defined');
   if (!scene.props.children) {
     throw `children property should be defined`;
@@ -259,6 +136,14 @@ function processScene(scene: Scene, inheritProps) {
   const res = {};
   const order = [];
   const {tabs, modal, lazy, drawer, ...parentProps} = scene.props;
+
+  const commonProps = { ...parentProps, ...inheritProps};
+  // add inherit props
+  for (const key of Object.keys(commonProps)) {
+    if (dontInheritKeys.indexOf(key) !== -1)
+      delete commonProps[key];
+  }
+
   const children = !Array.isArray(parentProps.children) ? [parentProps.children] : parentProps.children;
   let initialRouteName, initialRouteParams;
   for (const child of children) {
@@ -272,7 +157,7 @@ function processScene(scene: Scene, inheritProps) {
       navigationStore.states[key] = {};
     }
     for (const transition of Object.keys(props)) {
-      if (transition[props] instanceof Function) {
+      if (reservedKeys.indexOf(transition) === -1 && (transition[props] instanceof Function)) {
         navigationStore.states[key][transition] = props[transition];
       }
     }
@@ -284,7 +169,7 @@ function processScene(scene: Scene, inheritProps) {
     }
     res[key] = {
       screen: component || processScene(child, parentProps),
-      navigationOptions: createNavigationOptions(child.props)
+      navigationOptions: createNavigationOptions({...child.props, ...commonProps})
     };
 
     // a bit of magic, create all 'actions'-shortcuts inside navigationStore
