@@ -1,18 +1,18 @@
 {
   "name": "react-native-router-native",
-  "version": "4.0.0-alpha.7",
+  "version": "4.0.0-beta.3",
   "description": "React Native Router using Flux architecture",
   "repository": {
     "type": "git",
     "url": "https://github.com/aksonov/react-native-router-flux"
   },
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "start": "node node_modules/react-native/local-cli/cli.js start",
+    "build": "babel src -d dist --presets react-native-stage-0/decorator-support",
     "test": "jest"
   },
   "dependencies": {
-    "autobind-decorator": "^1.4.1",
     "mobx": "^3.1.16",
     "mobx-react": "^4.2.1",
     "react-native-button": "^2.0.0",

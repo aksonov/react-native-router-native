@@ -1,6 +1,6 @@
 import {observable, autorun, computed, toJS} from 'mobx';
-import autobind from 'autobind-decorator';
 import {NavigationActions} from 'react-navigation';
+import ActionConst from './ActionConst';
 import {OnEnter, OnExit} from './Util';
 
 function filterParam(data) {
@@ -15,10 +15,17 @@ function filterParam(data) {
   return data;
 }
 
-@autobind
+const createAction = (type: string) => (payload: Object = {}) => ({
+  type,
+  ...payload,
+});
+
+
+
 class NavigationStore {
   _router = null;
   states = {};
+  reducer = null;
   @observable _state;
   @observable currentScene = '';
   @observable prevScene = '';
@@ -35,7 +42,6 @@ class NavigationStore {
   }
 
   constructor(){
-    console.log("CREATE NAVIGATION STORE");
     const defaultSuccess = () => {};
     const defaultFailure = () => {};
 
@@ -46,7 +52,6 @@ class NavigationStore {
           const handler = this[this.prevScene + OnExit];
           if (handler) {
             try {
-              console.log("RUN onExit handler for state=",this.prevScene);
               const res = handler();
               if (res instanceof Promise) {
                 res.then(defaultSuccess, defaultFailure);
@@ -56,8 +61,7 @@ class NavigationStore {
             }
           }
         }
-        if (this.currentScene && this.currentScene !== this.prevScene) {
-          console.log("CURRENT SCENE:", this.currentScene, " PREV SCENE:", this.prevScene);
+        if (this.currentScene && this.currentScene !== this.prevScene && this.states[this.currentScene]) {
           const handler = this[this.currentScene + OnEnter];
           const success = this.states[this.currentScene].success || defaultSuccess;
           const failure = this.states[this.currentScene].failure || defaultFailure;
@@ -69,7 +73,11 @@ class NavigationStore {
               if (res instanceof Promise) {
                 res.then(success, failure);
               } else {
-                success(res);
+                if (res) {
+                  success(res);
+                } else {
+                  failure();
+                }
               }
             } catch (e) {
               console.error("Error during onEnter handler:", e);
@@ -85,40 +93,79 @@ class NavigationStore {
     });
   }
 
-  dispatch(action) {
-    const newState = this._router.getStateForAction(action, this.state);
+  dispatch = (action) => {
+    const newState = this.reducer ? this.reducer(this.state, action) : this._router.getStateForAction(action, this.state);
+    // don't allow duplicated scenes or null state
+    if (!newState || this.currentState(newState).routeName === this.currentScene) {
+      return;
+    }
     this._state = newState;
     this.prevScene = this.currentScene;
     this.currentScene = this.currentState(this._state).routeName;
-    console.log("ACTION:", action.routeName);
-    console.log("CHANGE STATE:", JSON.stringify(this.state));
-  }
+  };
 
-  push(routeName, params = {}) {
-    this.dispatch(NavigationActions.navigate({routeName, params: filterParam(params)}));
-  }
+  run = (type = ActionConst.PUSH, routeName, actions, ...params) => {
+    let res = {};
+    for (const param of params) {
+      if (param) {
+        res = {...res, ...filterParam(param)};
+      }
+    }
+    res.routeName = routeName;
+    if (res.clone){
+      console.log("STATE:", JSON.stringify(this.state));
+    }
+    this.dispatch(createAction(type)({routeName, index:0, actions, params: res}));
+  };
 
-  currentState(state) {
+  push = (routeName, ...params) => {
+    this.run(ActionConst.PUSH, routeName, null, ...params);
+  };
+
+  drawerOpen = () => {
+    this.dispatch(NavigationActions.navigate({routeName: 'DrawerOpen'}));
+  };
+
+  drawerClose = () => {
+    this.dispatch(NavigationActions.navigate({routeName: 'DrawerClose'}));
+  };
+
+  currentState = (state) => {
     if (!state) {
       state = this._state;
-      if (!this._state) {
-        console.log("NULL STATE!!!!!!!!!!!!!");
-      }
     }
     if (!state.routes) {
       return state;
     } else {
       return this.currentState(state.routes[state.index]);
     }
-  }
+  };
 
-  refresh(params) {
+  refresh = (params) => {
     const key = this.currentState(this.state).key;
     this.dispatch(NavigationActions.setParams({key, params}));
-  }
+  };
 
-  pop() {
+  pop = () => {
     this.dispatch(NavigationActions.back());
+  };
+
+  reset = (routeName, ...params) => {
+    this.replace(routeName, ...params);
+  };
+
+  replace = (routeName, ...params) => {
+    let res = {};
+    for (const param of params) {
+      if (param) {
+        res = {...res, ...filterParam(param)};
+      }
+    }
+    res.routeName = routeName;
+    this.run(ActionConst.REPLACE, routeName, [NavigationActions.navigate({
+      routeName,
+      params: res
+    })]);
   }
 }
 

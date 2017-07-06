@@ -1,25 +1,28 @@
 import React from 'react';
 import {observable, autorun, computed, toJS} from 'mobx';
 import {observer} from 'mobx-react/native';
-import autobind from 'autobind-decorator';
 import navigationStore from './navigationStore';
 import Scene from './Scene';
 import {OnEnter, OnExit,assert } from './Util';
 import {TabNavigator, DrawerNavigator, StackNavigator, NavigationActions, addNavigationHelpers} from 'react-navigation';
 import {renderRightButton, renderLeftButton, renderBackButton} from './NavBar';
+import LightboxNavigator from './LightboxNavigator';
+import _drawerImage from '../images/menu_burger.png';
 
 const reservedKeys = [
+  'children',
   'navigate',
   'currentState',
   'refresh',
   'dispatch',
   'push',
   'setParams',
-  'back',
+  'run',
   'onEnter',
   'onRight',
   'onLeft',
   'left',
+  'back',
   'right',
   'rightButton',
   'leftButton',
@@ -29,11 +32,17 @@ const reservedKeys = [
   'renderLeftButton',
   'renderRightButton',
   'navBar',
-  'title'
+  'title',
+  'drawerOpen',
+  'drawerClose'
 ];
 
 const dontInheritKeys = [
   'component',
+  'modal',
+  'drawer',
+  'tabs',
+  'navigator',
   'children',
   'key',
   'ref',
@@ -41,7 +50,6 @@ const dontInheritKeys = [
   'title',
   'hideNavBar',
   'hideTabBar',
-  'navTransparent',
 ];
 
 function filterParam(data) {
@@ -61,33 +69,50 @@ function getValue(value, params) {
   return value instanceof Function ? value(params) : value;
 }
 
+function createTabBarOptions({tabBarStyle, activeTintColor, inactiveTintColor, activeBackgroundColor, inactiveBackgroundColor, showLabel, labelStyle, tabStyle}) {
+  return {style:tabBarStyle, activeTintColor, inactiveTintColor, activeBackgroundColor, inactiveBackgroundColor, showLabel, labelStyle, tabStyle};
+}
 function createNavigationOptions(params) {
   const {title, backButtonImage, navTransparent, hideNavBar, hideTabBar, backTitle, right, rightButton, left, leftButton,
-    navigationBarStyle, headerStyle, navBarButtonColor,
-    headerTitleStyle, titleStyle, navBar, onRight, onLeft, rightButtonImage, leftButtonImage} = params;
+    navigationBarStyle, headerStyle, navBarButtonColor, tabBarLabel, tabBarIcon, icon, getTitle,
+    headerTitleStyle, titleStyle, navBar, onRight, onLeft, rightButtonImage, leftButtonImage, init, back} = params;
   let NavBar = navBar;
   return ({navigation, screenProps}) => {
     const navigationParams = navigation.state.params || {};
     const res = {
       headerTintColor: navBarButtonColor,
       headerTitleStyle : headerTitleStyle || titleStyle,
-      title: getValue((navigationParams.title) || title, {...navigationParams, ...screenProps}),
-      headerBackTitle: getValue((navigationParams.backTitle) || backTitle, {...navigationParams, ...screenProps}),
-      headerRight: getValue((navigationParams.right) || right || rightButton || params.renderRightButton, {...navigationParams, ...screenProps}),
-      headerLeft: getValue((navigationParams.left) || left || leftButton || params.renderLeftButton, {...navigationParams, ...screenProps}),
-      headerStyle: getValue((navigationParams.headerStyle || headerStyle || navigationBarStyle), {...navigationParams, ...screenProps}),
+      title: getValue((navigationParams.title) || title || getTitle, {navigation, ...navigationParams, ...screenProps}),
+      headerBackTitle: getValue((navigationParams.backTitle) || backTitle, {navigation, ...navigationParams, ...screenProps}),
+      headerRight: getValue((navigationParams.right) || right || rightButton || params.renderRightButton, {navigation, ...navigationParams, ...screenProps}),
+      headerLeft: getValue((navigationParams.left) || left || leftButton || params.renderLeftButton, {navigation, ...navigationParams, ...screenProps}),
+      headerStyle: getValue((navigationParams.headerStyle || headerStyle || navigationBarStyle), {navigation, ...navigationParams, ...screenProps}),
       headerBackImage: navigationParams.backButtonImage || backButtonImage,
-    }
+    };
     if (NavBar) {
       res.header = (props) => <NavBar navigation={navigation} {...params} />
     }
 
+    if (tabBarLabel) {
+      res.tabBarLabel = tabBarLabel;
+    }
+
+    if (tabBarIcon || icon) {
+      res.tabBarIcon = tabBarIcon || icon;
+    }
+
     if (rightButtonImage || onRight) {
-      res.headerRight = getValue((navigationParams.right) || right || rightButton || params.renderRightButton, {...navigationParams, ...screenProps}) || renderRightButton({...params, ...navigationParams});
+      res.headerRight = getValue((navigationParams.right) || right || rightButton || params.renderRightButton,
+          {...navigationParams, ...screenProps}) || renderRightButton({...params, ...navigationParams});
     }
 
     if (leftButtonImage || onLeft || backButtonImage) {
-      res.headerLeft = getValue((navigationParams.left) || left || leftButton || params.renderLeftButton, {...navigationParams, ...screenProps}) || renderLeftButton({...params, ...navigationParams}) || renderBackButton({...params, ...navigationParams});
+      res.headerLeft = getValue((navigationParams.left) || left || leftButton || params.renderLeftButton, {...navigationParams, ...screenProps})
+        || renderLeftButton({...params, ...navigationParams}) || (init ? null : renderBackButton({...params, ...navigationParams}));
+    }
+
+    if (back) {
+      res.headerLeft = renderBackButton({...params, ...navigationParams});
     }
 
     if (hideTabBar) {
@@ -104,54 +129,67 @@ function createNavigationOptions(params) {
   }
 }
 
-@observer
-class Renderer extends React.Component {
-  render() {
-    const Component = this.props.router.screen;
-    return <Component navigation={addNavigationHelpers({state: this.props.router.state, dispatch: this.props.router.dispatch})}/>
+function createWrapper(Component) {
+  if (!Component) {
+    return null;
   }
+  return observer(({navigation, ...props}) => {
+    return <Component {...props} {...navigation.state.params} name={navigation.state.routeName} />
+  });
 }
 
-@observer
-class App extends React.Component {
 
-  render() {
-    const AppNavigator = this.props.navigator;
-    //console.log("NEW STATE:", JSON.stringify(navigationStore._state), JSON.stringify(navigationStore.currentState()));
-    return (
-      <AppNavigator navigation={addNavigationHelpers({
-        dispatch: navigationStore.dispatch,
-        state: navigationStore.state,
-      })} />
-    );
-  }
-}
+const App = observer(props =>{
+  const AppNavigator = props.navigator;
+  return (
+    <AppNavigator navigation={addNavigationHelpers({
+      dispatch: navigationStore.dispatch,
+      state: navigationStore.state,
+    })} />
+  );
+});
 
-function processScene(scene: Scene, inheritProps = {}) {
+function processScene(scene: Scene, inheritProps = {}, clones = []) {
   assert(scene.props, 'props should be defined');
   if (!scene.props.children) {
     throw `children property should be defined`;
   }
   const res = {};
   const order = [];
-  const {tabs, modal, lazy, drawer, ...parentProps} = scene.props;
+  const {tabs, modal, lightbox, navigator, wrap, drawerWidth, drawerPosition, contentOptions, contentComponent, lazy, drawer, ...parentProps} = scene.props;
 
   const commonProps = { ...parentProps, ...inheritProps};
   // add inherit props
-  for (const key of Object.keys(commonProps)) {
-    if (dontInheritKeys.indexOf(key) !== -1)
-      delete commonProps[key];
+  for (const pkey of Object.keys(commonProps)) {
+    if (dontInheritKeys.indexOf(pkey) !== -1) {
+      delete commonProps[pkey];
+    }
   }
 
-  const children = !Array.isArray(parentProps.children) ? [parentProps.children] : parentProps.children;
+  if (drawer && !commonProps.left && !commonProps.leftButtonImage && !commonProps.leftTitle && !commonProps.back) {
+    commonProps.leftButtonImage = _drawerImage;
+    commonProps.onLeft = navigationStore.drawerOpen;
+  }
+
+  const children = !Array.isArray(parentProps.children) ? [parentProps.children] : [...parentProps.children];
+  // add clone scenes
+  if (!drawer && !tabs) {
+    children.push(...clones);
+  }
   let initialRouteName, initialRouteParams;
   for (const child of children) {
     assert(child.key, `key should be defined for ${child}`);
-    const key = child.key;
+    let key = child.key;
+    const init = key === children[0].key;
     if (reservedKeys.indexOf(key) !== -1) {
       throw `Scene name cannot be reserved word: ${child.key}`;
     }
-    const {component, children, onEnter, onExit, on, failure, success, ...props} = child.props;
+    const {component, type = 'push', onEnter, onExit, on, failure, success, ...props} = child.props;
+    if (child.props.clone) {
+      if (clones.indexOf(child) === -1){
+        clones.push(child);
+      }
+    }
     if (!navigationStore.states[key]){
       navigationStore.states[key] = {};
     }
@@ -160,20 +198,32 @@ function processScene(scene: Scene, inheritProps = {}) {
         navigationStore.states[key][transition] = props[transition];
       }
     }
+    delete props.children;
     if (success) {
-      navigationStore.states[key].success = success instanceof Function ? success : ()=>navigationStore[success]();
+      navigationStore.states[key].success = success instanceof Function ? success : ()=>{console.log(`Success ${key}, go to state=${success}`);navigationStore[success]()};
     }
     if (failure) {
       navigationStore.states[key].failure = failure instanceof Function ? failure : ()=>{console.log(`Failure ${key}, go to state=${failure}`);navigationStore[failure]();}
     }
-    res[key] = {
-      screen: component || processScene(child, parentProps),
-      navigationOptions: createNavigationOptions({...child.props, ...commonProps})
+    //console.log(`KEY ${key} DRAWER ${drawer} TABS ${tabs} WRAP ${wrap}`, JSON.stringify(commonProps));
+    const screen = {
+      screen: createWrapper(component) || processScene(child, commonProps, clones),
+      navigationOptions: createNavigationOptions({...commonProps, ...child.props, init })
     };
 
+    // wrap component inside own navbar for tabs/drawer parent controllers
+    const wrapNavBar = drawer || tabs || wrap;
+    //console.log("SCENE:", key, wrapNavBar);
+    if (component && wrapNavBar) {
+      res[key] = {screen: processScene({key, props: {children:{key:`_${key}`, props: child.props}}}, commonProps, clones) };
+    } else {
+      res[key] = screen;
+    }
+
     // a bit of magic, create all 'actions'-shortcuts inside navigationStore
+    props.init = true;
     if (!navigationStore[key]) {
-      navigationStore[key] = new Function('actions', 'props', `return function ${key}(params){ actions.push('${key}', Object.assign({}, props, params))}`)(navigationStore, props);
+      navigationStore[key] = new Function('actions', 'props', 'type', `return function ${key}(params){ actions[type]('${key}', props, params)}`)(navigationStore, {...commonProps, ...props}, type);
     }
 
     if ((onEnter || on) && !navigationStore[key+OnEnter]) {
@@ -187,22 +237,30 @@ function processScene(scene: Scene, inheritProps = {}) {
     order.push(key);
     if (child.props.initial || !initialRouteName) {
       initialRouteName = key;
-      initialRouteParams = props;
+      initialRouteParams = {...commonProps, ...props};
     }
   }
   const mode = modal ? 'modal' : 'card';
-  if (tabs) {
-    return TabNavigator(res, {lazy, initialRouteParams, order, navigationOptions: createNavigationOptions(parentProps) });
+  if (lightbox) {
+    return LightboxNavigator(res, { mode, initialRouteParams, initialRouteName, navigationOptions: createNavigationOptions(parentProps) });
+  } else if (tabs) {
+    return TabNavigator(res, {lazy, initialRouteName, initialRouteParams, order, tabBarOptions:createTabBarOptions(parentProps), navigationOptions: createNavigationOptions(parentProps) });
   } else if (drawer) {
-    return DrawerNavigator(res);
+    return DrawerNavigator(res, {initialRouteName, contentComponent, order, backBehavior:'none'});
   } else {
-    return StackNavigator(res, { mode, initialRouteParams, initialRouteName, navigationOptions: createNavigationOptions(parentProps) });
+    if (navigator){
+      return navigator(res, {lazy, initialRouteName, initialRouteParams, order, ...parentProps, navigationOptions: createNavigationOptions(parentProps) });
+    } else {
+      return StackNavigator(res, { mode, initialRouteParams, initialRouteName, navigationOptions: createNavigationOptions(parentProps) });
+    }
   }
 }
 
-export default (scene: Scene) => {
-  const AppNavigator = processScene(scene);
+export default ({createReducer, ...props}) => {
+  const scene: Scene = props.children;
+  const AppNavigator = processScene(scene, props);
   navigationStore.router = AppNavigator.router;
+  navigationStore.reducer = createReducer && createReducer(props);
 
-  return ()=> <App navigator={AppNavigator} />;
+  return <App navigator={AppNavigator} />;
 }
